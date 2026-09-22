@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Hallazgo #{{ hallazgo.pk }}{% endblock %}
+{% block content %}
+
+<a href="{% url 'dashboard:hallazgos' %}" class="btn btn-link ps-0">← Volver a hallazgos</a>
+
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between">
+        <span><span class="badge badge-tipo-{{ hallazgo.tipo }}">{{ hallazgo.get_tipo_display }}</span> — Hallazgo #{{ hallazgo.pk }}</span>
+        <span class="badge bg-{% if hallazgo.estado == 'confirmado' %}success{% elif hallazgo.estado == 'descartado' %}secondary{% else %}warning text-dark{% endif %}">
+            {{ hallazgo.get_estado_display }}
+        </span>
+    </div>
+    <div class="card-body">
+        <h2 class="h6">Trazabilidad (regla + atributos + evidencia)</h2>
+        <dl class="row">
+            <dt class="col-sm-3">Regla aplicada</dt>
+            <dd class="col-sm-9">{{ hallazgo.regla_aplicada.nombre }} — {{ hallazgo.regla_aplicada.descripcion }}</dd>
+
+            <dt class="col-sm-3">Parámetro de gobernanza</dt>
+            <dd class="col-sm-9">{{ hallazgo.regla_aplicada.parametro_gobernanza.nombre }}</dd>
+
+            <dt class="col-sm-3">Score de similitud</dt>
+            <dd class="col-sm-9">{% if hallazgo.score_similitud %}{{ hallazgo.score_similitud|floatformat:4 }}{% else %}No aplica{% endif %}</dd>
+
+            <dt class="col-sm-3">Evidencia</dt>
+            <dd class="col-sm-9">{{ hallazgo.evidencia }}</dd>
+
+            <dt class="col-sm-3">Atributos comparados</dt>
+            <dd class="col-sm-9"><pre class="bg-light p-2 small">{{ hallazgo.atributos_comparados }}</pre></dd>
+
+            {% if hallazgo.explicacion_llm %}
+            <dt class="col-sm-3">Explicación (Qwen2.5)</dt>
+            <dd class="col-sm-9 fst-italic">{{ hallazgo.explicacion_llm }}</dd>
+            {% endif %}
+        </dl>
+
+        <h2 class="h6 mt-4">Indicador(es) involucrado(s)</h2>
+        <div class="row">
+            <div class="col-md-6">
+                <strong>Principal:</strong> {{ hallazgo.indicador_principal.nombre }}
+                <div class="text-muted small">{{ hallazgo.indicador_principal.dependencia }} — {{ hallazgo.indicador_principal.producto_actividad_proyecto }}</div>
+            </div>
+            {% if hallazgo.indicador_relacionado %}
+            <div class="col-md-6">
+                <strong>Relacionado:</strong> {{ hallazgo.indicador_relacionado.nombre }}
+                <div class="text-muted small">{{ hallazgo.indicador_relacionado.dependencia }} — {{ hallazgo.indicador_relacionado.producto_actividad_proyecto }}</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card-footer">
+        <h2 class="h6">Revisión del auditor (el hallazgo no se aplica de forma autónoma)</h2>
+        <form method="post" class="row g-2">
+            {% csrf_token %}
+            <div class="col-md-8">
+                <textarea name="observacion" class="form-control form-control-sm" rows="2"
+                          placeholder="Observación de revisión (opcional)">{{ hallazgo.observacion_revision }}</textarea>
+            </div>
+            <div class="col-md-4 d-flex gap-2 align-items-start">
+                <button type="submit" name="accion" value="confirmar" class="btn btn-success btn-sm">Confirmar hallazgo</button>
+                <button type="submit" name="accion" value="descartar" class="btn btn-outline-secondary btn-sm">Descartar</button>
+            </div>
+        </form>
+        {% if hallazgo.revisado_en %}
+            <div class="text-muted small mt-2">Revisado por {{ hallazgo.revisado_por|default:"—" }} el {{ hallazgo.revisado_en }}.</div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}

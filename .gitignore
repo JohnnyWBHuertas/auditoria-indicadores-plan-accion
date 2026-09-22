@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+db.sqlite3
+media/
+staticfiles/
+*.egg-info/
+.pytest_cache/
+
+# Modelos descargados de sentence-transformers / cache de huggingface
+.cache/
+models_cache/
+
+# IDE
+.vscode/
+.idea/

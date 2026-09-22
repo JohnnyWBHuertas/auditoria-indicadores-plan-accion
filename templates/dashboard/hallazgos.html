@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Hallazgos — Auditoría de Indicadores{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Hallazgos</h1>
+    <a href="{% url 'reportes:exportar_excel' %}?tipo={{ tipo_seleccionado|default:'' }}&estado={{ estado_seleccionado|default:'' }}"
+       class="btn btn-outline-success btn-sm">Exportar a Excel</a>
+</div>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-auto">
+        <select name="tipo" class="form-select form-select-sm" onchange="this.form.submit()">
+            <option value="">Todos los tipos</option>
+            {% for valor, etiqueta in tipo_choices %}
+                <option value="{{ valor }}" {% if valor == tipo_seleccionado %}selected{% endif %}>{{ etiqueta }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-auto">
+        <select name="estado" class="form-select form-select-sm" onchange="this.form.submit()">
+            <option value="">Todos los estados</option>
+            {% for valor, etiqueta in estado_choices %}
+                <option value="{{ valor }}" {% if valor == estado_seleccionado %}selected{% endif %}>{{ etiqueta }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</form>
+
+<div class="table-responsive">
+<table class="table table-sm table-hover bg-white">
+    <thead>
+        <tr>
+            <th>Tipo</th>
+            <th>Indicador principal</th>
+            <th>Indicador relacionado</th>
+            <th>Similitud</th>
+            <th>Regla aplicada</th>
+            <th>Estado</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for h in hallazgos %}
+        <tr>
+            <td><span class="badge badge-tipo-{{ h.tipo }}">{{ h.get_tipo_display }}</span></td>
+            <td>{{ h.indicador_principal.nombre|truncatechars:60 }}</td>
+            <td>{{ h.indicador_relacionado.nombre|truncatechars:60|default:"—" }}</td>
+            <td>{% if h.score_similitud %}{{ h.score_similitud|floatformat:2 }}{% else %}—{% endif %}</td>
+            <td>{{ h.regla_aplicada.nombre }}</td>
+            <td>
+                <span class="badge bg-{% if h.estado == 'confirmado' %}success{% elif h.estado == 'descartado' %}secondary{% else %}warning text-dark{% endif %}">
+                    {{ h.get_estado_display }}
+                </span>
+            </td>
+            <td><a href="{% url 'dashboard:hallazgo_detalle' h.pk %}" class="btn btn-sm btn-outline-primary">Ver</a></td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="7" class="text-center text-muted py-4">No hay hallazgos con estos filtros.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+
+{% endblock %}

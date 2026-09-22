@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Tablero — Auditoría de Indicadores{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0">Tablero de auditoría</h1>
+    <span class="badge bg-success">Ejecución 100% local</span>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h2 class="h6">Ejecutar auditoría sobre una vigencia</h2>
+        <form method="post" class="row g-2 align-items-center">
+            {% csrf_token %}
+            <input type="hidden" name="accion" value="ejecutar_auditoria">
+            <div class="col-auto">
+                <select name="vigencia" class="form-select" required>
+                    <option value="">Seleccione vigencia…</option>
+                    {% for v in vigencias_disponibles %}
+                        <option value="{{ v }}">{{ v }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary">Ejecutar CU2–CU4 (embeddings + reglas)</button>
+            </div>
+            <div class="col-auto text-muted small">
+                {{ total_indicadores }} indicadores cargados en total.
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if ultima_ejecucion %}
+    <h2 class="h5">Última ejecución — vigencia {{ ultima_ejecucion.vigencia }}
+        <small class="text-muted">({{ ultima_ejecucion.iniciada_en }})</small>
+    </h2>
+
+    {% with m=ultima_ejecucion.resumen_metricas %}
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card card-metric h-100"><div class="card-body">
+                <div class="text-muted small">Parámetros operacionalizados</div>
+                <div class="fs-4">{{ m.parametros_operacionalizados|default:"—" }} / {{ m.parametros_totales|default:"—" }}</div>
+            </div></div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-metric h-100"><div class="card-body">
+                <div class="text-muted small">Evidencia trazable completa</div>
+                <div class="fs-4">{% if m.proporcion_evidencia_trazable != None %}{{ m.proporcion_evidencia_trazable|floatformat:0 }}0%{% else %}—{% endif %}</div>
+            </div></div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-metric h-100"><div class="card-body">
+                <div class="text-muted small">Completitud hoja de vida</div>
+                <div class="fs-4">{% if m.completitud_hoja_de_vida != None %}{{ m.completitud_hoja_de_vida|floatformat:0 }}0%{% else %}—{% endif %}</div>
+            </div></div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-metric h-100"><div class="card-body">
+                <div class="text-muted small">Ejecución sin conexión externa</div>
+                <div class="fs-4">{% if m.ejecucion_100_por_ciento_local %}Confirmada{% else %}No confirmada{% endif %}</div>
+            </div></div>
+        </div>
+    </div>
+
+    <h3 class="h6">Hallazgos por tipo</h3>
+    <div class="row g-3 mb-4">
+        {% for tipo, cantidad in m.hallazgos_por_tipo.items %}
+        <div class="col-md-2">
+            <div class="card h-100 text-center"><div class="card-body">
+                <span class="badge badge-tipo-{{ tipo }} mb-2">{{ tipo }}</span>
+                <div class="fs-3">{{ cantidad }}</div>
+            </div></div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endwith %}
+
+    <a href="{% url 'dashboard:hallazgos' %}" class="btn btn-outline-primary">Ver todos los hallazgos →</a>
+{% else %}
+    <div class="alert alert-info">Aún no se ha ejecutado ninguna auditoría. Cargue indicadores y ejecútela arriba.</div>
+{% endif %}
+
+{% endblock %}

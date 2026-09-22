@@ -1,0 +1,25 @@
+Django>=5.0,<5.3
+psycopg[binary]>=3.1
+django-environ>=0.11
+truststore>=0.9
+
+# Ingesta de archivos
+pandas>=2.2
+openpyxl>=3.1
+
+# Motor de embeddings y similitud semantica (Reimers & Gurevych, 2019)
+# independiente del LLM, ejecutado 100% local
+sentence-transformers>=3.0
+torch>=2.2
+
+# Cliente Ollama (Qwen2.5) para clasificacion metodologica,
+# casos ambiguos y explicacion de hallazgos
+ollama>=0.3
+
+# Procesamiento asincrono (embeddings por lote, llamadas al LLM)
+celery>=5.4
+redis>=5.0
+
+# Exportacion de reportes
+openpyxl>=3.1
+reportlab>=4.2
