@@ -13,8 +13,8 @@ El sistema carga el reporte de indicadores de una vigencia, compara semánticame
 Permite a un revisor probar el prototipo sin reportes reales: el conjunto de control (`datos_ejemplo/conjunto_control_2026.csv`) es sintético, de nueve indicadores, y produce exactamente un hallazgo de cada tipo.
 
 ```bash
-git clone <URL-del-repositorio>
-cd prototipo-auditoria-ia
+git clone https://github.com/JohnnyWBHuertas/auditoria-indicadores-plan-accion.git
+cd auditoria-indicadores-plan-accion
 python -m venv .venv
 .venv\Scripts\activate            # Windows (en Linux/macOS: source .venv/bin/activate)
 pip install -r requirements.txt
