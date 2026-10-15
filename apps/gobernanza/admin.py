@@ -11,9 +11,9 @@ class DependenciaAdmin(admin.ModelAdmin):
 
 @admin.register(ParametroGobernanza)
 class ParametroGobernanzaAdmin(admin.ModelAdmin):
-    list_display = ["nombre", "categoria", "operacionalizado"]
-    list_filter = ["categoria", "operacionalizado"]
-    search_fields = ["nombre", "descripcion"]
+    list_display = ["codigo", "nombre", "categoria", "operacionalizacion"]
+    list_filter = ["categoria", "operacionalizacion"]
+    search_fields = ["codigo", "nombre", "descripcion"]
 
 
 @admin.register(EjecucionAuditoria)

@@ -15,6 +15,8 @@
         .badge-tipo-divergencia_operativa { background-color: #fd7e14; }
         .badge-tipo-incompletitud_atributos { background-color: #6c757d; }
         .badge-tipo-problema_metodologico { background-color: #6f42c1; }
+        .tarjeta-enlace { transition: box-shadow .15s, transform .15s; }
+        .tarjeta-enlace:hover { box-shadow: 0 .4rem 1rem rgba(0,0,0,.15); transform: translateY(-2px); }
         footer { color: #6c757d; font-size: .85rem; }
     </style>
 </head>
@@ -29,9 +31,19 @@
             <ul class="navbar-nav me-auto">
                 <li class="nav-item"><a class="nav-link" href="{% url 'dashboard:inicio' %}">Tablero</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'dashboard:hallazgos' %}">Hallazgos</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'dashboard:comparar' %}">Comparar vigencias</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'ingesta:cargar' %}">Cargar archivo</a></li>
+                {% if user.is_staff %}
                 <li class="nav-item"><a class="nav-link" href="/admin/">Administración</a></li>
+                {% endif %}
             </ul>
+            {% if user.is_authenticated %}
+            <form method="post" action="{% url 'logout' %}" class="d-flex align-items-center gap-2 mb-0">
+                {% csrf_token %}
+                <span class="navbar-text small">{{ user.get_full_name|default:user.username }}</span>
+                <button type="submit" class="btn btn-outline-light btn-sm">Salir</button>
+            </form>
+            {% endif %}
         </div>
     </div>
 </nav>

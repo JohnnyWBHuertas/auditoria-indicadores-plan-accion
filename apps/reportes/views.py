@@ -1,3 +1,4 @@
+from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
@@ -5,6 +6,7 @@ from openpyxl.utils import get_column_letter
 from apps.auditoria.models import Hallazgo
 
 
+@login_required
 def exportar_excel(request):
     """CU5 (cierre): exporta el listado de hallazgos con su evidencia asociada."""
     qs = Hallazgo.objects.select_related(
@@ -13,10 +15,16 @@ def exportar_excel(request):
 
     tipo = request.GET.get("tipo")
     estado = request.GET.get("estado")
+    dependencia = request.GET.get("dependencia")
     if tipo:
         qs = qs.filter(tipo=tipo)
     if estado:
         qs = qs.filter(estado=estado)
+    if dependencia:
+        qs = qs.filter(indicador_principal__dependencia_id=dependencia)
+    ejecucion = request.GET.get("ejecucion")
+    if ejecucion and ejecucion.isdigit():
+        qs = qs.filter(ejecucion_id=ejecucion)
 
     wb = Workbook()
     ws = wb.active
@@ -25,7 +33,7 @@ def exportar_excel(request):
     encabezados = [
         "ID", "Tipo", "Estado", "Indicador principal", "Dependencia principal",
         "Indicador relacionado", "Score similitud", "Regla aplicada",
-        "Parámetro de gobernanza", "Evidencia", "Explicación (Qwen2.5)", "Creado en",
+        "Parámetro de gobernanza", "Evidencia", "Revisado por", "Observación de revisión", "Creado en",
     ]
     ws.append(encabezados)
 
@@ -41,7 +49,8 @@ def exportar_excel(request):
             h.regla_aplicada.nombre,
             h.regla_aplicada.parametro_gobernanza.nombre,
             h.evidencia,
-            h.explicacion_llm,
+            str(h.revisado_por) if h.revisado_por else "",
+            h.observacion_revision,
             h.creado_en.strftime("%Y-%m-%d %H:%M"),
         ])
 

@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}Comparar vigencias — Auditoría de Indicadores{% endblock %}
+{% block content %}
+
+<h1 class="h3 mb-1">Comparar vigencias</h1>
+<p class="text-muted">
+    Seleccione una o varias vigencias para contrastar su número de indicadores y de hallazgos.
+    Los hallazgos de cada vigencia son los de su <strong>última auditoría ejecutada</strong>.
+</p>
+
+<form method="get" id="form-vigencias" class="card mb-4">
+    <div class="card-body">
+        <div class="fw-semibold mb-2">Vigencias cargadas</div>
+        {% if disponibles %}
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            {% for v in disponibles %}
+                <input type="checkbox" class="btn-check" name="vigencias" id="vig-{{ v }}" value="{{ v }}" autocomplete="off"
+                       {% if v in seleccion %}checked{% endif %}>
+                <label class="btn btn-outline-primary" for="vig-{{ v }}">{{ v }}</label>
+            {% endfor %}
+            <button type="button" class="btn btn-link btn-sm" id="marcar-todas">Seleccionar todas</button>
+            <button type="submit" class="btn btn-primary btn-sm ms-auto">Comparar</button>
+        </div>
+        {% if sin_seleccion %}<div class="small text-muted mt-2">No había ninguna seleccionada: se muestran todas.</div>{% endif %}
+        {% else %}
+        <div class="text-muted">Aún no hay indicadores cargados. Cargue un archivo para comenzar.</div>
+        {% endif %}
+    </div>
+</form>
+
+{% if filas %}
+<div class="row g-3 mb-4">
+    <div class="col-md-3"><div class="card card-metric h-100"><div class="card-body">
+        <div class="text-muted small">Vigencias comparadas</div>
+        <div class="fs-4">{{ filas|length }}</div>
+    </div></div></div>
+    <div class="col-md-3"><div class="card card-metric h-100"><div class="card-body">
+        <div class="text-muted small">Indicadores en las vigencias seleccionadas</div>
+        <div class="fs-4">{{ total_indicadores }}</div>
+    </div></div></div>
+</div>
+
+{% if sin_auditoria %}
+<div class="alert alert-warning py-2">
+    Sin auditoría ejecutada: <strong>{{ sin_auditoria|join:", " }}</strong>. Ejecútela desde el
+    <a href="{% url 'dashboard:inicio' %}">tablero</a> para incluir sus hallazgos en la comparación.
+</div>
+{% endif %}
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h2 class="h6">Indicadores, hallazgos y variación</h2>
+        <div style="position: relative; height: 22rem;">
+            <canvas id="grafica-comparacion" aria-label="Gráfica de indicadores, hallazgos y variación por vigencia" role="img"></canvas>
+        </div>
+        <div id="grafica-error" class="alert alert-secondary d-none mt-2 mb-0">
+            No se pudo cargar la librería de gráficas (requiere conexión la primera vez). La tabla de abajo contiene los mismos valores.
+        </div>
+    </div>
+</div>
+
+<div class="table-responsive">
+<table class="table table-sm table-bordered bg-white align-middle">
+    <thead class="table-light">
+        <tr>
+            <th>Vigencia</th>
+            <th class="text-end">Total de indicadores</th>
+            <th class="text-end">Indicadores con hallazgos</th>
+            <th>Auditoría usada</th>
+            <th class="text-end">Hallazgos</th>
+            <th class="text-end">Variación de hallazgos</th>
+            <th class="text-end">Hallazgos por indicador</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for f in filas %}
+        <tr>
+            <td class="fw-semibold">{{ f.vigencia }}</td>
+            <td class="text-end">{{ f.indicadores }}</td>
+            <td class="text-end">
+                {% if f.involucrados is None %}<span class="text-muted">—</span>
+                {% else %}{{ f.involucrados }} <span class="text-muted small">({{ f.pct_involucrados }} %)</span>{% endif %}
+            </td>
+            <td class="small">
+                {% if f.ejecucion %}{{ f.ejecucion.iniciada_en|date:"d/m/Y H:i" }} <span class="text-muted">(#{{ f.ejecucion.pk }})</span>
+                {% else %}<span class="text-muted">Sin auditoría</span>{% endif %}
+            </td>
+            <td class="text-end">
+                {% if f.ejecucion %}<a href="{% url 'dashboard:hallazgos' %}?ejecucion={{ f.ejecucion.pk }}">{{ f.hallazgos }}</a>{% else %}—{% endif %}
+            </td>
+            <td class="text-end">
+                {% if f.variacion is None %}<span class="text-muted">—</span>
+                {% elif f.variacion > 0 %}<span class="text-danger fw-semibold">▲ +{{ f.variacion }} %</span>
+                {% elif f.variacion < 0 %}<span class="text-success fw-semibold">▼ {{ f.variacion }} %</span>
+                {% else %}<span class="text-muted">0 %</span>{% endif %}
+            </td>
+            <td class="text-end">{% if f.por_indicador is None %}—{% else %}{{ f.por_indicador }}{% endif %}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+<p class="small text-muted">
+    «Total de indicadores» cuenta todos los de la vigencia, estén o no en hallazgos; «Indicadores con hallazgos» cuenta los que aparecen
+    en al menos un hallazgo, como principal o relacionado. La variación compara los hallazgos de cada vigencia con los de la vigencia anterior seleccionada que tenga auditoría;
+    la primera no tiene base. «Hallazgos por indicador» permite comparar vigencias de distinto tamaño.
+    Un aumento (▲, en rojo) significa más inconsistencias señaladas.
+</p>
+
+<h2 class="h6 mt-4">Hallazgos por tipo</h2>
+<div class="table-responsive">
+<table class="table table-sm bg-white">
+    <thead><tr><th>Tipo</th>{% for f in filas %}<th class="text-end">{{ f.vigencia }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for fila in tabla_tipos %}
+        <tr>
+            <td>{{ fila.etiqueta }}</td>
+            {% for valor in fila.valores %}<td class="text-end">{% if valor is None %}—{% else %}{{ valor }}{% endif %}</td>{% endfor %}
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+
+{{ grafica|json_script:"datos-grafica" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+    var datos = JSON.parse(document.getElementById("datos-grafica").textContent);
+    if (typeof Chart === "undefined") {
+        document.getElementById("grafica-error").classList.remove("d-none");
+        return;
+    }
+    new Chart(document.getElementById("grafica-comparacion"), {
+        data: {
+            labels: datos.etiquetas,
+            datasets: [
+                { type: "bar", label: "Indicadores", data: datos.indicadores, backgroundColor: "#9ec5fe", yAxisID: "y" },
+                { type: "bar", label: "Hallazgos", data: datos.hallazgos, backgroundColor: "#0d6efd", yAxisID: "y" },
+                { type: "line", label: "Variación de hallazgos (%)", data: datos.variacion, borderColor: "#dc3545",
+                  backgroundColor: "#dc3545", yAxisID: "y1", tension: 0.2, pointRadius: 5, spanGaps: true }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: "index", intersect: false },
+            scales: {
+                y: { beginAtZero: true, title: { display: true, text: "Cantidad" } },
+                y1: { position: "right", title: { display: true, text: "Variación (%)" }, grid: { drawOnChartArea: false },
+                      ticks: { callback: function (v) { return v + " %"; } } }
+            },
+            plugins: {
+                tooltip: { callbacks: { label: function (c) {
+                    var v = c.parsed.y;
+                    return c.dataset.label + ": " + (c.dataset.yAxisID === "y1" ? v + " %" : v);
+                } } }
+            }
+        }
+    });
+})();
+</script>
+{% endif %}
+
+<script>
+    var form = document.getElementById("form-vigencias");
+    if (form) {
+        form.querySelectorAll("input[name=vigencias]").forEach(function (c) {
+            c.addEventListener("change", function () { form.submit(); });
+        });
+        var todas = document.getElementById("marcar-todas");
+        if (todas) {
+            todas.addEventListener("click", function () {
+                form.querySelectorAll("input[name=vigencias]").forEach(function (c) { c.checked = true; });
+                form.submit();
+            });
+        }
+    }
+</script>
+
+{% endblock %}

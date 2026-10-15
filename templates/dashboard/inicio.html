@@ -22,7 +22,7 @@
                 </select>
             </div>
             <div class="col-auto">
-                <button type="submit" class="btn btn-primary">Ejecutar CU2–CU4 (embeddings + reglas)</button>
+                <button type="submit" class="btn btn-primary">Ejecutar auditoría (embeddings + reglas)</button>
             </div>
             <div class="col-auto text-muted small">
                 {{ total_indicadores }} indicadores cargados en total.
@@ -37,47 +37,97 @@
     </h2>
 
     {% with m=ultima_ejecucion.resumen_metricas %}
-    <div class="row g-3 mb-4">
-        <div class="col-md-3">
-            <div class="card card-metric h-100"><div class="card-body">
-                <div class="text-muted small">Parámetros operacionalizados</div>
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-xl-5 g-3 mb-4">
+        <div class="col">
+            <a href="{% url 'dashboard:detalle_parametros' ultima_ejecucion.pk %}" class="text-decoration-none text-reset" title="Ver la matriz de parámetros">
+            <div class="card card-metric h-100 tarjeta-enlace"><div class="card-body">
+                <div class="text-muted small">1. Parámetros operacionalizados</div>
                 <div class="fs-4">{{ m.parametros_operacionalizados|default:"—" }} / {{ m.parametros_totales|default:"—" }}</div>
+                {% if m.parametros_parciales %}<div class="text-muted small">más {{ m.parametros_parciales }} parcial(es)</div>{% endif %}
+                <div class="small text-primary mt-1">Ver detalle →</div>
             </div></div>
+            </a>
         </div>
-        <div class="col-md-3">
-            <div class="card card-metric h-100"><div class="card-body">
-                <div class="text-muted small">Evidencia trazable completa</div>
-                <div class="fs-4">{% if m.proporcion_evidencia_trazable != None %}{{ m.proporcion_evidencia_trazable|floatformat:0 }}0%{% else %}—{% endif %}</div>
+        <div class="col">
+            <a href="{% url 'dashboard:detalle_correspondencia' ultima_ejecucion.pk %}" class="text-decoration-none text-reset" title="Ver el avance del contraste manual">
+            <div class="card card-metric h-100 tarjeta-enlace"><div class="card-body">
+                <div class="text-muted small">3. Correspondencia con la caracterización manual</div>
+                <div class="small mt-1">
+                    Coincidentes: <strong>{{ correspondencia.coincidente }}</strong><br>
+                    No coincidentes: <strong>{{ correspondencia.no_coincidente }}</strong><br>
+                    Adicionales: <strong>{{ correspondencia.adicional }}</strong>
+                </div>
+                <div class="small text-primary mt-1">Ver detalle →</div>
             </div></div>
+            </a>
         </div>
-        <div class="col-md-3">
-            <div class="card card-metric h-100"><div class="card-body">
-                <div class="text-muted small">Completitud hoja de vida</div>
-                <div class="fs-4">{% if m.completitud_hoja_de_vida != None %}{{ m.completitud_hoja_de_vida|floatformat:0 }}0%{% else %}—{% endif %}</div>
+        <div class="col">
+            <a href="{% url 'dashboard:detalle_trazabilidad' ultima_ejecucion.pk %}" class="text-decoration-none text-reset" title="Ver la trazabilidad de los hallazgos">
+            <div class="card card-metric h-100 tarjeta-enlace"><div class="card-body">
+                <div class="text-muted small">4. Evidencia trazable completa</div>
+                <div class="fs-4">{% if pct_evidencia != None %}{{ pct_evidencia }}%{% else %}—{% endif %}</div>
+                <div class="small text-primary mt-1">Ver detalle →</div>
             </div></div>
+            </a>
         </div>
-        <div class="col-md-3">
+        <div class="col">
+            <a href="{% url 'dashboard:detalle_completitud' ultima_ejecucion.pk %}" class="text-decoration-none text-reset" title="Ver qué atributos faltan">
+            <div class="card card-metric h-100 tarjeta-enlace"><div class="card-body">
+                <div class="text-muted small">5. Completitud de la hoja de vida</div>
+                <div class="fs-4">{% if pct_completitud != None %}{{ pct_completitud }}%{% else %}—{% endif %}</div>
+                <div class="small text-primary mt-1">Ver detalle →</div>
+            </div></div>
+            </a>
+        </div>
+        <div class="col">
             <div class="card card-metric h-100"><div class="card-body">
-                <div class="text-muted small">Ejecución sin conexión externa</div>
+                <div class="text-muted small">6. Ejecución sin conexión externa</div>
                 <div class="fs-4">{% if m.ejecucion_100_por_ciento_local %}Confirmada{% else %}No confirmada{% endif %}</div>
+                <div class="small text-muted mt-1">
+                    Todo el cálculo, incluido el modelo de IA, se ejecutó en este equipo; ningún dato salió a servicios externos.
+                    {% if ultima_ejecucion.ejecutado_por %}Ejecutada por {{ ultima_ejecucion.ejecutado_por }}.{% endif %}
+                </div>
             </div></div>
         </div>
     </div>
 
-    <h3 class="h6">Hallazgos por tipo</h3>
-    <div class="row g-3 mb-4">
+    <h3 class="h6">2. Hallazgos por tipo</h3>
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-xl-5 g-3 mb-4">
         {% for tipo, cantidad in m.hallazgos_por_tipo.items %}
-        <div class="col-md-2">
-            <div class="card h-100 text-center"><div class="card-body">
-                <span class="badge badge-tipo-{{ tipo }} mb-2">{{ tipo }}</span>
-                <div class="fs-3">{{ cantidad }}</div>
-            </div></div>
+        <div class="col">
+            <a href="{% url 'dashboard:hallazgos' %}?tipo={{ tipo }}&ejecucion={{ ultima_ejecucion.pk }}"
+               class="text-decoration-none text-reset" title="Ver los hallazgos de este tipo">
+                <div class="card h-100 text-center tarjeta-enlace"><div class="card-body">
+                    <span class="badge badge-tipo-{{ tipo }} mb-2 text-wrap">{{ tipo }}</span>
+                    <div class="fs-3">{{ cantidad }}</div>
+                    <div class="small text-primary">Ver hallazgos →</div>
+                </div></div>
+            </a>
         </div>
         {% endfor %}
     </div>
     {% endwith %}
 
-    <a href="{% url 'dashboard:hallazgos' %}" class="btn btn-outline-primary">Ver todos los hallazgos →</a>
+    <h3 class="h6">Hallazgos por dependencia</h3>
+    <table class="table table-sm bg-white mb-4">
+        <thead><tr><th>Dependencia</th><th class="text-end">Hallazgos</th></tr></thead>
+        <tbody>
+        {% for fila in hallazgos_por_dependencia %}
+            <tr>
+                <td>
+                    <a href="{% url 'dashboard:hallazgos' %}?dependencia={{ fila.indicador_principal__dependencia_id }}&ejecucion={{ ultima_ejecucion.pk }}">
+                        {{ fila.indicador_principal__dependencia__nombre }}
+                    </a>
+                </td>
+                <td class="text-end">{{ fila.total }}</td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="2" class="text-muted text-center">La ejecución no produjo hallazgos.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <a href="{% url 'dashboard:hallazgos' %}?ejecucion={{ ultima_ejecucion.pk }}" class="btn btn-outline-primary">Ver todos los hallazgos de esta ejecución →</a>
 {% else %}
     <div class="alert alert-info">Aún no se ha ejecutado ninguna auditoría. Cargue indicadores y ejecútela arriba.</div>
 {% endif %}

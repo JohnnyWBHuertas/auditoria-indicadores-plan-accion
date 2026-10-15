@@ -33,13 +33,31 @@ class ParametroGobernanza(models.Model):
     una regla, un atributo evaluable o un umbral dentro del sistema.
     """
 
+    # Los cinco enfoques de la revision documental; cada uno aporta un tipo
+    # distinto de parametro (ver TIPO_POR_ENFOQUE).
     CATEGORIA_CHOICES = [
         ("gobernanza", "Gobernanza de datos"),
         ("calidad", "Calidad de datos"),
         ("auditoria", "Auditoría de datos"),
-        ("representacion_semantica", "Representación semántica"),
+        ("datos_maestros", "Gestión de datos maestros"),
+        ("pln", "Procesamiento de lenguaje natural"),
     ]
 
+    TIPO_POR_ENFOQUE = {
+        "gobernanza": "Reglas de decisión",
+        "calidad": "Criterios de aceptación",
+        "auditoria": "Estándar de evidencia",
+        "datos_maestros": "Regla de unicidad",
+        "pln": "Modo de comparación semántica",
+    }
+
+    OPERACIONALIZACION_CHOICES = [
+        ("si", "Operacionalizado"),
+        ("parcial", "Parcialmente operacionalizado"),
+        ("no", "No operacionalizado"),
+    ]
+
+    codigo = models.CharField(max_length=4, unique=True, help_text="Ej. P01")
     nombre = models.CharField(max_length=255)
     categoria = models.CharField(max_length=30, choices=CATEGORIA_CHOICES)
     descripcion = models.TextField()
@@ -48,18 +66,29 @@ class ParametroGobernanza(models.Model):
         blank=True,
         help_text="Referencia APA de la fuente de la que se deriva el parámetro.",
     )
-    operacionalizado = models.BooleanField(
-        default=False,
-        help_text="Indica si el parámetro ya quedó expresado como regla/atributo/umbral en el prototipo.",
+    operacionalizacion = models.CharField(
+        max_length=10,
+        choices=OPERACIONALIZACION_CHOICES,
+        default="no",
+        help_text="Indica si el parámetro quedó expresado como regla, atributo evaluable o umbral en el prototipo.",
+    )
+    implementacion = models.CharField(
+        max_length=300,
+        blank=True,
+        help_text="Dónde se materializa en el prototipo, o por qué no se operacionaliza.",
     )
 
     class Meta:
         verbose_name = "Parámetro de gobernanza"
         verbose_name_plural = "Parámetros de gobernanza"
-        ordering = ["categoria", "nombre"]
+        ordering = ["codigo"]
 
     def __str__(self):
-        return f"[{self.get_categoria_display()}] {self.nombre}"
+        return f"{self.codigo} {self.nombre}"
+
+    @property
+    def tipo_parametro(self) -> str:
+        return self.TIPO_POR_ENFOQUE.get(self.categoria, "")
 
 
 class EjecucionAuditoria(models.Model):

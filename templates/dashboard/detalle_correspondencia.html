@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Correspondencia con la caracterización manual{% endblock %}
+{% block content %}
+
+<a href="{% url 'dashboard:inicio' %}" class="btn btn-link ps-0">← Volver al tablero</a>
+
+<h1 class="h4">3. Correspondencia con la caracterización manual</h1>
+<p class="text-muted">
+    Contrasta lo que señaló el prototipo con lo que usted identificó a mano. Abra cada hallazgo y registre si
+    <em>coincide</em>, <em>no coincide</em> o es un hallazgo <em>adicional</em> que no había identificado.
+    Ejecución de la vigencia {{ ejecucion.vigencia }}: {{ total }} hallazgos.
+</p>
+
+<ul class="nav nav-pills mb-3">
+    {% for clave, etiqueta, cantidad in grupos %}
+    <li class="nav-item">
+        <a class="nav-link {% if clave == grupo %}active{% endif %}" href="?grupo={{ clave }}">
+            {{ etiqueta }} <span class="badge bg-light text-dark">{{ cantidad }}</span>
+        </a>
+    </li>
+    {% endfor %}
+</ul>
+
+<div class="table-responsive">
+<table class="table table-sm table-hover bg-white">
+    <thead><tr><th>Tipo</th><th>Indicador principal</th><th>Dependencia</th><th>Estado de revisión</th><th></th></tr></thead>
+    <tbody>
+    {% for h in hallazgos %}
+        <tr>
+            <td><span class="badge badge-tipo-{{ h.tipo }}">{{ h.get_tipo_display }}</span></td>
+            <td>{{ h.indicador_principal.nombre|truncatechars:80 }}</td>
+            <td>{{ h.indicador_principal.dependencia.nombre|truncatechars:40 }}</td>
+            <td>{{ h.get_estado_display }}</td>
+            <td><a href="{% url 'dashboard:hallazgo_detalle' h.pk %}" class="btn btn-sm btn-outline-primary">
+                {% if grupo == "sin_registrar" %}Registrar{% else %}Ver{% endif %}</a></td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="5" class="text-center text-muted py-4">No hay hallazgos en «{{ grupo_etiqueta }}».</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% if total_grupo > limite %}<p class="small text-muted">Se muestran los primeros {{ limite }} de {{ total_grupo }}.</p>{% endif %}
+
+{% endblock %}

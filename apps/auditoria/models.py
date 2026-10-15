@@ -9,9 +9,9 @@ class ReglaAuditoria(models.Model):
     """Regla implementada que materializa un ParametroGobernanza.
 
     Es la pieza que responde el criterio de "cobertura": cada parametro
-    identificado en la revision documental debe poder rastrearse hasta una
-    fila de esta tabla (o quedar explicitamente como resultado negativo,
-    ver monografia Sec. "Hallazgos esperados").
+    operacionalizado en la revision documental debe poder rastrearse hasta
+    una regla (o quedar explicitamente como resultado negativo, ver
+    monografia Sec. "Hallazgos esperados").
     """
 
     TIPO_HALLAZGO_CHOICES = [
@@ -88,11 +88,6 @@ class Hallazgo(models.Model):
     evidencia = models.TextField(
         help_text="Justificación legible por humano: qué se comparó y por qué constituye un hallazgo."
     )
-    explicacion_llm = models.TextField(
-        blank=True,
-        help_text="Explicación generada por Qwen2.5 (Ollama) para apoyar la revisión del auditor.",
-    )
-
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default="pendiente")
     revisado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True

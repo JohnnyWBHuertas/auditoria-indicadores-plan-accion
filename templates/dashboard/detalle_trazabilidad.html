@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Evidencia trazable{% endblock %}
+{% block content %}
+
+<a href="{% url 'dashboard:inicio' %}" class="btn btn-link ps-0">← Volver al tablero</a>
+
+<h1 class="h4">4. Evidencia trazable completa</h1>
+<p class="text-muted">
+    Un hallazgo es trazable cuando informa tres cosas: la <strong>regla</strong> que se aplicó, los <strong>atributos comparados</strong>
+    y la <strong>evidencia</strong> que lo sustenta. Sin ellas, un hallazgo no sirve en un procedimiento de auditoría.
+    El sistema no permite crear hallazgos sin estos tres elementos.
+</p>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3"><div class="card"><div class="card-body">
+        <div class="text-muted small">Hallazgos de la ejecución</div><div class="fs-4">{{ total }}</div></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body">
+        <div class="text-muted small">Con regla aplicada</div><div class="fs-4">{{ con_regla }} / {{ total }}</div></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body">
+        <div class="text-muted small">Con atributos comparados</div><div class="fs-4">{{ con_atributos }} / {{ total }}</div></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body">
+        <div class="text-muted small">Con evidencia</div><div class="fs-4">{{ con_evidencia }} / {{ total }}</div></div></div></div>
+</div>
+
+<h2 class="h6">Por tipo de hallazgo</h2>
+<table class="table table-sm bg-white mb-4">
+    <thead><tr><th>Tipo</th><th class="text-end">Hallazgos</th><th class="text-end">Trazables</th></tr></thead>
+    <tbody>
+    {% for f in por_tipo %}
+        <tr><td>{{ f.tipo }}</td><td class="text-end">{{ f.total }}</td><td class="text-end">{{ f.trazables }}</td></tr>
+    {% empty %}
+        <tr><td colspan="3" class="text-muted text-center">La ejecución no produjo hallazgos.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2 class="h6">Excepciones</h2>
+{% if excepciones %}
+    <ul>
+    {% for h in excepciones %}
+        <li><a href="{% url 'dashboard:hallazgo_detalle' h.pk %}">Hallazgo #{{ h.pk }}</a> — {{ h.get_tipo_display }}: {{ h.indicador_principal.nombre|truncatechars:80 }}</li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <div class="alert alert-success">Ninguna: los {{ total }} hallazgos informan regla, atributos comparados y evidencia.</div>
+{% endif %}
+
+{% endblock %}

@@ -46,7 +46,7 @@ class ParCandidato(models.Model):
     modelo = models.CharField(max_length=150)
     generado_en = models.DateTimeField(auto_now_add=True)
     procesado = models.BooleanField(
-        default=False, help_text="True cuando apps.auditoria ya evaluó este par."
+        default=False, help_text="True cuando alguna ejecución de apps.auditoria ya evaluó este par."
     )
 
     class Meta:

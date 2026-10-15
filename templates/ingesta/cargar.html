@@ -11,14 +11,24 @@
             Si la estructura de su archivo no coincide con ninguna plantilla existente,
             cree una nueva desde <a href="/admin/ingesta/plantillamapeocolumnas/add/">Administración</a>.
         </p>
-        <form method="post" enctype="multipart/form-data">
+        <form method="post" enctype="multipart/form-data" id="form-carga">
             {% csrf_token %}
             {{ form.as_p }}
-            <button type="submit" class="btn btn-primary">Cargar y normalizar</button>
+            <button type="submit" class="btn btn-primary" id="boton-carga">Cargar y normalizar</button>
+            <span class="text-muted small ms-2 d-none" id="aviso-carga">Procesando el archivo; puede tardar unos segundos. No cierre ni recargue la página.</span>
         </form>
     </div>
 </div>
 
 <p class="mt-3"><a href="{% url 'ingesta:historial' %}">Ver historial de cargas →</a></p>
+
+<script>
+    document.getElementById("form-carga").addEventListener("submit", function () {
+        var boton = document.getElementById("boton-carga");
+        boton.disabled = true;
+        boton.textContent = "Procesando…";
+        document.getElementById("aviso-carga").classList.remove("d-none");
+    });
+</script>
 
 {% endblock %}

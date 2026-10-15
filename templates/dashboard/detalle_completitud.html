@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Completitud de la hoja de vida{% endblock %}
+{% block content %}
+
+<a href="{% url 'dashboard:inicio' %}" class="btn btn-link ps-0">← Volver al tablero</a>
+
+<h1 class="h4">5. Completitud de la hoja de vida</h1>
+<p class="text-muted">
+    Mide cuántos de los atributos exigidos tiene diligenciados cada indicador de la vigencia {{ ejecucion.vigencia }}
+    ({{ total }} indicadores). Un atributo con «no especificada» o vacío cuenta como no diligenciado.
+</p>
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <h2 class="h6">Por atributo</h2>
+        <table class="table table-sm bg-white">
+            <thead><tr><th>Atributo</th><th style="width: 45%">Indicadores que lo tienen</th><th></th></tr></thead>
+            <tbody>
+            {% for a in atributos %}
+                <tr>
+                    <td><a href="?atributo={{ a.campo }}#lista">{{ a.etiqueta }}</a></td>
+                    <td>
+                        <div class="progress" style="height: 1.1rem;" role="progressbar" aria-valuenow="{{ a.pct }}" aria-valuemin="0" aria-valuemax="100">
+                            <div class="progress-bar {% if a.pct < 50 %}bg-danger{% elif a.pct < 90 %}bg-warning{% else %}bg-success{% endif %}"
+                                 style="width: {{ a.pct }}%">{% if a.pct >= 15 %}{{ a.pct }}%{% endif %}</div>
+                        </div>
+                    </td>
+                    <td class="text-end small">{% if a.pct < 15 %}{{ a.pct }}% · {% endif %}{{ a.tienen }}/{{ total }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="col-lg-7">
+        <h2 class="h6">Por dependencia (de menor a mayor completitud)</h2>
+        <div style="max-height: 24rem; overflow-y: auto;">
+        <table class="table table-sm bg-white">
+            <thead><tr><th>Dependencia</th><th class="text-end">Indicadores</th><th class="text-end">Completitud</th></tr></thead>
+            <tbody>
+            {% for d in dependencias %}
+                <tr><td>{{ d.nombre }}</td><td class="text-end">{{ d.indicadores }}</td><td class="text-end">{{ d.pct }}%</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+
+<h2 class="h6 mt-4" id="lista">
+    {% if filtro %}Indicadores sin «{{ filtro_etiqueta }}» ({{ total_lista }})
+        <a href="?#lista" class="btn btn-sm btn-outline-secondary ms-2">Ver todos con faltantes</a>
+    {% else %}Indicadores con atributos faltantes ({{ total_lista }}){% endif %}
+</h2>
+<div class="table-responsive">
+<table class="table table-sm table-hover bg-white">
+    <thead><tr><th>Indicador</th><th>Dependencia</th><th>Atributos que faltan</th></tr></thead>
+    <tbody>
+    {% for fila in lista %}
+        <tr>
+            <td>{{ fila.indicador.nombre|truncatechars:80 }}</td>
+            <td>{{ fila.indicador.dependencia.nombre|truncatechars:40 }}</td>
+            <td class="small">{{ fila.faltan|join:", " }}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="3" class="text-center text-muted py-4">Todos los indicadores tienen sus atributos diligenciados.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% if total_lista > limite %}<p class="small text-muted">Se muestran los {{ limite }} con más faltantes de {{ total_lista }}.</p>{% endif %}
+
+{% endblock %}

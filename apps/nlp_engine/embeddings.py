@@ -1,15 +1,13 @@
-"""Motor de embeddings (CU2): capa independiente del LLM.
+"""Motor de embeddings (CU2): unico modelo de inteligencia artificial del prototipo.
 
 Decision de arquitectura: la similitud semantica se calcula con
-sentence-transformers (Reimers & Gurevych, 2019), nunca con Qwen2.5. Esto
-preserva la trazabilidad metodologica entre el marco teorico citado en la
-monografia y su implementacion, y aisla el motor de embeddings de
-cualquier cambio en el modelo de lenguaje usado para explicaciones.
+sentence-transformers (Reimers & Gurevych, 2019), modelo
+paraphrase-multilingual-mpnet-base-v2, ejecutado localmente. El modelo solo
+propone pares candidatos; la clasificacion por tipo la hacen las reglas de
+auditoria (apps.auditoria) y la decision final es del auditor.
 """
 
 from __future__ import annotations
-
-import itertools
 
 import numpy as np
 from django.conf import settings
@@ -21,13 +19,24 @@ from .models import EmbeddingIndicador, ParCandidato
 _modelo_cargado = None
 
 
+class ModeloNoDisponible(RuntimeError):
+    """El modelo de embeddings no pudo cargarse en este equipo (por ejemplo, una
+    biblioteca nativa bloqueada por el sistema operativo o sin descargar)."""
+
+
 def get_embedding_model():
     """Carga perezosa y unica del modelo (evita recargar en cada llamada)."""
     global _modelo_cargado
     if _modelo_cargado is None:
-        from sentence_transformers import SentenceTransformer
+        try:
+            from sentence_transformers import SentenceTransformer
 
-        _modelo_cargado = SentenceTransformer(settings.NLP_ENGINE["EMBEDDING_MODEL"])
+            _modelo_cargado = SentenceTransformer(settings.NLP_ENGINE["EMBEDDING_MODEL"])
+        except (ImportError, OSError) as exc:
+            raise ModeloNoDisponible(
+                f"No fue posible cargar el modelo de embeddings ({settings.NLP_ENGINE['EMBEDDING_MODEL']}): {str(exc).rstrip('. ')}. "
+                "Ejecute 'python manage.py verificar_entorno' para ver qué componente falla."
+            ) from exc
     return _modelo_cargado
 
 
@@ -36,26 +45,35 @@ def texto_para_embedding(indicador: Indicador) -> str:
     return " . ".join(p.strip() for p in partes if p and p.strip())
 
 
-def generar_embeddings_pendientes() -> int:
-    """Calcula embeddings para indicadores que aun no lo tienen. Devuelve el conteo."""
+def generar_embeddings_pendientes(tamano_lote: int = 32) -> int:
+    """Calcula, por lotes, los embeddings de los indicadores que aun no lo
+    tienen. Devuelve el conteo de embeddings creados."""
+    pendientes = []
+    textos = []
+    for indicador in Indicador.objects.filter(embedding__isnull=True):
+        texto = texto_para_embedding(indicador)
+        if texto:
+            pendientes.append(indicador)
+            textos.append(texto)
+    if not pendientes:
+        return 0
+
     modelo = get_embedding_model()
     nombre_modelo = settings.NLP_ENGINE["EMBEDDING_MODEL"]
+    vectores = modelo.encode(textos, batch_size=tamano_lote, normalize_embeddings=True)
 
-    pendientes = Indicador.objects.filter(embedding__isnull=True)
-    creados = 0
-    for indicador in pendientes:
-        texto = texto_para_embedding(indicador)
-        if not texto:
-            continue
-        vector = modelo.encode(texto, normalize_embeddings=True).tolist()
-        EmbeddingIndicador.objects.create(
-            indicador=indicador,
-            modelo=nombre_modelo,
-            texto_fuente=texto,
-            vector=vector,
-        )
-        creados += 1
-    return creados
+    EmbeddingIndicador.objects.bulk_create(
+        [
+            EmbeddingIndicador(
+                indicador=indicador,
+                modelo=nombre_modelo,
+                texto_fuente=texto,
+                vector=vector.tolist(),
+            )
+            for indicador, texto, vector in zip(pendientes, textos, vectores)
+        ]
+    )
+    return len(pendientes)
 
 
 def similitud_coseno(vector_a: list[float], vector_b: list[float]) -> float:
@@ -67,34 +85,48 @@ def similitud_coseno(vector_a: list[float], vector_b: list[float]) -> float:
     return float(np.dot(a, b) / denom)
 
 
-def generar_pares_candidatos(vigencia: str, umbral: float | None = None) -> int:
-    """Compara por pares los indicadores de una vigencia y persiste los
-    candidatos por encima del umbral de duplicidad (CU2). Devuelve el
-    conteo de pares nuevos generados.
+def generar_pares_candidatos(vigencia: str, umbral: float | None = None, bloque: int = 500) -> int:
+    """Compara todos los indicadores de una vigencia (examen poblacional
+    completo) y persiste los pares cuya similitud coseno alcanza el umbral
+    de duplicidad (CU2). La comparacion se hace por bloques de filas con
+    producto matricial, de modo que el costo crece de forma manejable con el
+    volumen. Devuelve el numero de pares candidatos de la vigencia.
     """
     umbral = umbral if umbral is not None else settings.NLP_ENGINE["UMBRAL_DUPLICIDAD"]
     nombre_modelo = settings.NLP_ENGINE["EMBEDDING_MODEL"]
 
     embeddings = list(
-        EmbeddingIndicador.objects.filter(
-            indicador__vigencia=vigencia, modelo=nombre_modelo
-        ).select_related("indicador")
+        EmbeddingIndicador.objects.filter(indicador__vigencia=vigencia, modelo=nombre_modelo)
+        .order_by("indicador_id")
+        .values_list("indicador_id", "vector")
     )
+    if len(embeddings) < 2:
+        return 0
 
-    creados = 0
-    for emb_a, emb_b in itertools.combinations(embeddings, 2):
-        score = similitud_coseno(emb_a.vector, emb_b.vector)
-        if score < umbral:
-            continue
-        indicador_a, indicador_b = sorted(
-            [emb_a.indicador, emb_b.indicador], key=lambda i: i.pk
-        )
-        _, creado = ParCandidato.objects.get_or_create(
-            indicador_a=indicador_a,
-            indicador_b=indicador_b,
-            modelo=nombre_modelo,
-            defaults={"similitud_coseno": score},
-        )
-        if creado:
-            creados += 1
-    return creados
+    ids = np.array([e[0] for e in embeddings])
+    matriz = np.array([e[1] for e in embeddings], dtype=np.float32)
+    normas = np.linalg.norm(matriz, axis=1, keepdims=True)
+    normas[normas == 0] = 1.0
+    matriz = matriz / normas
+
+    n = len(ids)
+    columnas = np.arange(n)
+    pares = []
+    for inicio in range(0, n, bloque):
+        fin = min(inicio + bloque, n)
+        similitudes = matriz[inicio:fin] @ matriz.T
+        filas = np.arange(inicio, fin)[:, None]
+        # solo la mitad superior (j > i): cada par se evalua una vez
+        fi, cj = np.nonzero((similitudes >= umbral) & (columnas[None, :] > filas))
+        for f, c in zip(fi, cj):
+            pares.append(
+                ParCandidato(
+                    indicador_a_id=int(ids[inicio + f]),
+                    indicador_b_id=int(ids[c]),
+                    modelo=nombre_modelo,
+                    similitud_coseno=float(similitudes[f, c]),
+                )
+            )
+
+    ParCandidato.objects.bulk_create(pares, ignore_conflicts=True)
+    return len(pares)

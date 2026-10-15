@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Parámetros operacionalizados — Auditoría de Indicadores{% endblock %}
+{% block content %}
+
+<a href="{% url 'dashboard:inicio' %}" class="btn btn-link ps-0">← Volver al tablero</a>
+
+<h1 class="h4">1. Parámetros operacionalizados</h1>
+<p class="text-muted">
+    Cada parámetro identificado en la revisión documental debe poder rastrearse hasta una regla del prototipo.
+    Aquí se muestra cuáles quedaron expresados como regla, atributo evaluable o umbral, y cuántos hallazgos
+    produjo cada uno en la ejecución de la vigencia {{ ejecucion.vigencia }}.
+</p>
+
+<div class="row g-3 mb-3">
+    <div class="col-auto"><span class="badge bg-success fs-6">{{ si }} operacionalizados</span></div>
+    <div class="col-auto"><span class="badge bg-warning text-dark fs-6">{{ parcial }} parcial</span></div>
+    <div class="col-auto"><span class="badge bg-secondary fs-6">{{ no }} no operacionalizado</span></div>
+    <div class="col-auto text-muted align-self-center">de {{ total }} parámetros identificados</div>
+</div>
+
+<div class="table-responsive">
+<table class="table table-sm table-bordered bg-white align-middle">
+    <thead class="table-light">
+        <tr>
+            <th>Código</th>
+            <th>Parámetro</th>
+            <th>Enfoque y tipo</th>
+            <th>Estado</th>
+            <th>Cómo se materializa</th>
+            <th>Regla de auditoría</th>
+            <th class="text-end">Hallazgos</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for f in filas %}
+        <tr>
+            <td class="fw-semibold">{{ f.parametro.codigo }}</td>
+            <td>{{ f.parametro.nombre }}
+                <div class="small text-muted">{{ f.parametro.fuente_bibliografica }}</div>
+            </td>
+            <td>{{ f.parametro.get_categoria_display }}
+                <div class="small text-muted">{{ f.parametro.tipo_parametro }}</div>
+            </td>
+            <td>
+                {% if f.parametro.operacionalizacion == "si" %}<span class="badge bg-success">Sí</span>
+                {% elif f.parametro.operacionalizacion == "parcial" %}<span class="badge bg-warning text-dark">Parcial</span>
+                {% else %}<span class="badge bg-secondary">No</span>{% endif %}
+            </td>
+            <td class="small">{{ f.parametro.implementacion }}</td>
+            <td class="small">
+                {% for r in f.reglas %}{{ r.nombre }}{% if not forloop.last %}<br>{% endif %}
+                {% empty %}<span class="text-muted">
+                    {% if f.parametro.operacionalizacion == "si" %}Atributo o principio de diseño: no genera hallazgos propios
+                    {% elif f.parametro.operacionalizacion == "parcial" %}Sin regla propia: cubierto en parte por otro parámetro
+                    {% else %}Sin regla: no operacionalizado{% endif %}
+                </span>{% endfor %}
+            </td>
+            <td class="text-end">
+                {% if f.hallazgos is None %}<span class="text-muted">—</span>
+                {% else %}
+                    {% if f.tipos|length == 1 %}
+                        <a href="{% url 'dashboard:hallazgos' %}?tipo={{ f.tipos.0 }}&ejecucion={{ ejecucion.pk }}">{{ f.hallazgos }}</a>
+                    {% else %}
+                        {{ f.hallazgos }}
+                    {% endif %}
+                {% endif %}
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+<p class="small text-muted">
+    Un parámetro «parcial» se cubre solo en parte; uno «no operacionalizado» queda como resultado negativo del estudio,
+    porque depende de decisiones institucionales fuera del alcance del prototipo.
+</p>
+
+{% endblock %}

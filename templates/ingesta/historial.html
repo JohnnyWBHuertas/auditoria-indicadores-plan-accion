@@ -10,22 +10,23 @@
 <table class="table table-sm bg-white">
     <thead><tr>
         <th>Archivo</th><th>Vigencia</th><th>Plantilla</th><th>Estado</th>
-        <th>Filas totales</th><th>Cargadas</th><th>Con error</th><th>Fecha</th>
+        <th>Filas totales</th><th>Cargadas</th><th>Sin indicador</th><th>Con error</th><th>Fecha</th>
     </tr></thead>
     <tbody>
     {% for c in cargas %}
         <tr>
-            <td>{{ c.archivo.name }}</td>
+            <td>{{ c.nombre_archivo|default:c.archivo.name }}</td>
             <td>{{ c.vigencia }}</td>
             <td>{{ c.plantilla }}</td>
             <td><span class="badge bg-{% if c.estado == 'completado' %}success{% elif c.estado == 'fallido' %}danger{% else %}warning text-dark{% endif %}">{{ c.get_estado_display }}</span></td>
             <td>{{ c.filas_totales }}</td>
             <td>{{ c.filas_cargadas }}</td>
+            <td>{{ c.filas_sin_indicador }}</td>
             <td>{{ c.filas_con_error }}</td>
             <td>{{ c.cargado_en }}</td>
         </tr>
     {% empty %}
-        <tr><td colspan="8" class="text-center text-muted py-4">Sin cargas registradas.</td></tr>
+        <tr><td colspan="9" class="text-center text-muted py-4">Sin cargas registradas.</td></tr>
     {% endfor %}
     </tbody>
 </table>

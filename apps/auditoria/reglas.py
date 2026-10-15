@@ -5,6 +5,10 @@ definiciones de la monografia y deja constancia obligatoria de regla
 aplicada + atributos comparados + evidencia (requisito de explicabilidad).
 El juicio de equivalencia de proposito sigue siendo del auditor humano:
 todo hallazgo nace en estado "pendiente".
+
+La unica inteligencia artificial del sistema es el modelo de embeddings
+(apps.nlp_engine), que propone pares candidatos; la clasificacion por tipo
+y las demas verificaciones son reglas deterministas.
 """
 
 from __future__ import annotations
@@ -15,13 +19,12 @@ import re
 from django.conf import settings
 from django.utils import timezone
 
-from apps.gobernanza.models import EjecucionAuditoria
+from apps.gobernanza.models import EjecucionAuditoria, ParametroGobernanza
 from apps.ingesta.models import Indicador
 from apps.nlp_engine import embeddings as nlp
-from apps.nlp_engine import ollama_client
 from apps.nlp_engine.models import ParCandidato
 
-from .models import Hallazgo, ReglaAuditoria
+from .models import CorrespondenciaManual, Hallazgo, ReglaAuditoria
 
 CAMPOS_CLONACION = ["nombre", "formula", "meta"]
 CAMPOS_CLONACION_VARIABLES = ["dependencia_id", "vigencia", "meta", "producto_actividad_proyecto"]
@@ -33,15 +36,9 @@ CAMPOS_CLONACION_VARIABLES = ["dependencia_id", "vigencia", "meta", "producto_ac
 # categoricos para que una desigualdad textual sea evidencia de divergencia.
 CAMPOS_DIVERGENCIA = ["unidad_medida", "periodicidad"]
 
-# Heuristica del Informe de Duplicidad de Indicadores PAA 2026: un
-# indicador valido inicia en termino cuantificable o termina en participio
-# de acumulacion; una actividad inicia en verbo de accion puntual.
-PATRON_INDICADOR_VALIDO = re.compile(
-    r"^(número|numero|porcentaje|tasa|avance de obra)\b|"
-    r"(realizados?|implementados?|fortalecidos?|apoyados?|atendidos?|"
-    r"beneficiados?|formados?|asistidos?|procesados?|elaborados?)\.?$",
-    re.IGNORECASE,
-)
+# Heuristica lexica del Informe de Duplicidad de Indicadores PAA 2026: un
+# nombre que inicia en verbo o sustantivo de accion puntual describe una
+# actividad y no una magnitud medible acumulable.
 PATRON_ACTIVIDAD = re.compile(
     r"^(entregar|realizar|crear|cerrar|cierre de|entrega de|creación de|"
     r"creacion de|implementar|adelantar|gestionar|elaborar)\b",
@@ -72,8 +69,10 @@ def _obtener_regla(tipo_hallazgo: str) -> ReglaAuditoria:
 
 
 def evaluar_pares_candidatos(ejecucion: EjecucionAuditoria, vigencia: str) -> dict:
-    """Clasifica cada ParCandidato sin procesar en clonacion, divergencia
-    operativa o duplicidad (CU2 -> CU3/CU4)."""
+    """Clasifica cada ParCandidato de la vigencia en clonacion, divergencia
+    operativa o duplicidad (CU2 -> CU3/CU4). Cada ejecucion reevalua todos
+    los pares vigentes, de modo que repetir la auditoria produce el mismo
+    resultado."""
     conteo = {"clonacion": 0, "divergencia_operativa": 0, "duplicidad": 0}
 
     regla_clonacion = _obtener_regla("clonacion")
@@ -83,8 +82,10 @@ def evaluar_pares_candidatos(ejecucion: EjecucionAuditoria, vigencia: str) -> di
     umbral_clonacion = settings.NLP_ENGINE["UMBRAL_CLONACION_TEXTUAL"]
 
     pares = ParCandidato.objects.filter(
-        procesado=False, indicador_a__vigencia=vigencia
-    ).select_related("indicador_a", "indicador_b")
+        indicador_a__vigencia=vigencia,
+        modelo=settings.NLP_ENGINE["EMBEDDING_MODEL"],
+        similitud_coseno__gte=settings.NLP_ENGINE["UMBRAL_DUPLICIDAD"],
+    ).select_related("indicador_a", "indicador_b").order_by("pk")
 
     for par in pares:
         a, b = par.indicador_a, par.indicador_b
@@ -153,16 +154,14 @@ def evaluar_pares_candidatos(ejecucion: EjecucionAuditoria, vigencia: str) -> di
             )
             conteo["duplicidad"] += 1
 
-        par.procesado = True
-        par.save(update_fields=["procesado"])
-
+    pares.update(procesado=True)
     return conteo
 
 
 def evaluar_incompletitud(ejecucion: EjecucionAuditoria, vigencia: str) -> int:
     regla = _obtener_regla("incompletitud_atributos")
     creados = 0
-    for indicador in Indicador.objects.filter(vigencia=vigencia):
+    for indicador in Indicador.objects.filter(vigencia=vigencia).order_by("pk"):
         diligenciados = indicador.atributos_diligenciados()
         faltantes = [campo for campo, ok in diligenciados.items() if not ok]
         if not faltantes:
@@ -184,31 +183,25 @@ def evaluar_incompletitud(ejecucion: EjecucionAuditoria, vigencia: str) -> int:
 
 
 def evaluar_problema_metodologico(ejecucion: EjecucionAuditoria, vigencia: str) -> int:
+    """Marca los nombres redactados como actividad puntual en lugar de
+    magnitud medible (regla lexica)."""
     regla = _obtener_regla("problema_metodologico")
     creados = 0
-    for indicador in Indicador.objects.filter(vigencia=vigencia):
-        nombre = indicador.nombre or ""
-
-        if PATRON_ACTIVIDAD.match(nombre.strip()):
-            clasificacion, justificacion = "actividad", "Inicia con verbo de acción puntual (regla léxica)."
-        elif PATRON_INDICADOR_VALIDO.search(nombre.strip()):
-            continue  # estructura valida, no es hallazgo
-        else:
-            resultado = ollama_client.clasificar_problema_metodologico(nombre)
-            if resultado is None or resultado["clasificacion"] != "actividad":
-                continue
-            clasificacion, justificacion = "actividad", resultado["justificacion"]
-
+    for indicador in Indicador.objects.filter(vigencia=vigencia).order_by("pk"):
+        nombre = (indicador.nombre or "").strip()
+        if not PATRON_ACTIVIDAD.match(nombre):
+            continue
         _crear_hallazgo(
             ejecucion=ejecucion,
             regla=regla,
             indicador_principal=indicador,
             indicador_relacionado=None,
             score=None,
-            atributos_comparados={"nombre": nombre, "clasificacion": clasificacion},
+            atributos_comparados={"nombre": nombre, "clasificacion": "actividad"},
             evidencia=(
                 f"El nombre del indicador #{indicador.pk} está redactado como actividad, "
-                f"no como magnitud medible acumulable. {justificacion}"
+                "no como magnitud medible acumulable: inicia con un verbo o sustantivo de "
+                "acción puntual (regla léxica)."
             ),
         )
         creados += 1
@@ -218,7 +211,7 @@ def evaluar_problema_metodologico(ejecucion: EjecucionAuditoria, vigencia: str) 
 def _crear_hallazgo(
     *, ejecucion, regla, indicador_principal, indicador_relacionado, score, atributos_comparados, evidencia
 ) -> Hallazgo:
-    hallazgo = Hallazgo.objects.create(
+    return Hallazgo.objects.create(
         tipo=regla.tipo_hallazgo,
         ejecucion=ejecucion,
         regla_aplicada=regla,
@@ -228,16 +221,24 @@ def _crear_hallazgo(
         score_similitud=score,
         evidencia=evidencia,
     )
-    explicacion = ollama_client.explicar_hallazgo(
-        tipo_hallazgo=regla.get_tipo_hallazgo_display(),
-        regla=regla.nombre,
-        atributos_comparados=atributos_comparados,
-        evidencia_base=evidencia,
-    )
-    if explicacion:
-        hallazgo.explicacion_llm = explicacion
-        hallazgo.save(update_fields=["explicacion_llm"])
-    return hallazgo
+
+
+def es_trazable(hallazgo: Hallazgo) -> bool:
+    """Un hallazgo es trazable si informa la regla aplicada, los atributos
+    comparados y la evidencia que lo sustenta."""
+    return bool(hallazgo.regla_aplicada_id and hallazgo.atributos_comparados and (hallazgo.evidencia or "").strip())
+
+
+def conteo_correspondencia(ejecucion: EjecucionAuditoria) -> dict:
+    """Variable observable 3: hallazgos coincidentes, no coincidentes y
+    adicionales frente a la caracterizacion manual (se registran con
+    CorrespondenciaManual cuando se dispone del reporte real)."""
+    base = CorrespondenciaManual.objects.filter(hallazgo__ejecucion=ejecucion)
+    return {
+        "coincidente": base.filter(tipo_correspondencia="coincidente").count(),
+        "no_coincidente": base.filter(tipo_correspondencia="no_coincidente").count(),
+        "adicional": base.filter(tipo_correspondencia="adicional").count(),
+    }
 
 
 def ejecutar_auditoria(vigencia: str, usuario=None) -> EjecucionAuditoria:
@@ -249,30 +250,36 @@ def ejecutar_auditoria(vigencia: str, usuario=None) -> EjecucionAuditoria:
         ejecucion_100_por_ciento_local=settings.EJECUCION_100_POR_CIENTO_LOCAL,
     )
 
-    nlp.generar_embeddings_pendientes()
-    nlp.generar_pares_candidatos(vigencia)
+    try:
+        nlp.generar_embeddings_pendientes()
+        nlp.generar_pares_candidatos(vigencia)
+    except Exception:
+        ejecucion.delete()  # sin embeddings no hay auditoria: no dejar una ejecucion vacia
+        raise
 
     conteo_pares = evaluar_pares_candidatos(ejecucion, vigencia)
     conteo_incompletitud = evaluar_incompletitud(ejecucion, vigencia)
     conteo_metodologico = evaluar_problema_metodologico(ejecucion, vigencia)
 
-    total_indicadores = Indicador.objects.filter(vigencia=vigencia).count()
-    total_campos_exigidos = total_indicadores * 9
-    campos_diligenciados = sum(
-        sum(1 for ok in i.atributos_diligenciados().values() if ok)
-        for i in Indicador.objects.filter(vigencia=vigencia)
-    )
-    hallazgos = ejecucion.hallazgos.all()
-    con_evidencia = hallazgos.exclude(evidencia="").count()
+    indicadores = Indicador.objects.filter(vigencia=vigencia)
+    total_campos_exigidos = 0
+    campos_diligenciados = 0
+    for indicador in indicadores:
+        atributos = indicador.atributos_diligenciados()
+        total_campos_exigidos += len(atributos)
+        campos_diligenciados += sum(1 for ok in atributos.values() if ok)
 
-    parametros_totales = ejecucion.parametros_aplicados.model.objects.count()
-    parametros_operacionalizados = ejecucion.parametros_aplicados.model.objects.filter(
-        operacionalizado=True
-    ).count()
+    hallazgos = list(ejecucion.hallazgos.all())
+    trazables = sum(1 for h in hallazgos if es_trazable(h))
+
+    parametros = ParametroGobernanza.objects.all()
+    aplicados = parametros.filter(operacionalizacion="si")
+    ejecucion.parametros_aplicados.set(aplicados)
 
     ejecucion.resumen_metricas = {
-        "parametros_operacionalizados": parametros_operacionalizados,
-        "parametros_totales": parametros_totales,
+        "parametros_operacionalizados": aplicados.count(),
+        "parametros_parciales": parametros.filter(operacionalizacion="parcial").count(),
+        "parametros_totales": parametros.count(),
         "hallazgos_por_tipo": {
             "duplicidad": conteo_pares["duplicidad"],
             "clonacion": conteo_pares["clonacion"],
@@ -280,9 +287,8 @@ def ejecutar_auditoria(vigencia: str, usuario=None) -> EjecucionAuditoria:
             "incompletitud_atributos": conteo_incompletitud,
             "problema_metodologico": conteo_metodologico,
         },
-        "proporcion_evidencia_trazable": (
-            round(con_evidencia / hallazgos.count(), 4) if hallazgos.count() else None
-        ),
+        "correspondencia_manual": conteo_correspondencia(ejecucion),
+        "proporcion_evidencia_trazable": round(trazables / len(hallazgos), 4) if hallazgos else None,
         "completitud_hoja_de_vida": (
             round(campos_diligenciados / total_campos_exigidos, 4) if total_campos_exigidos else None
         ),

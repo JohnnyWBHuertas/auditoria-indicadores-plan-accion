@@ -115,27 +115,17 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Configuracion del dominio: gobernanza, NLP y ejecucion local
 # ---------------------------------------------------------------------------
 
-# Motor de embeddings (sentence-transformers, independiente del LLM segun
-# la decision arquitectonica: trazabilidad metodologica con Reimers &
-# Gurevych, 2019). Modelo multilingue por defecto para textos en espanol.
+# Motor de embeddings (sentence-transformers; Reimers & Gurevych, 2019): unico
+# modelo de inteligencia artificial del prototipo, ejecutado localmente.
+# Modelo multilingue por defecto para textos en espanol.
 NLP_ENGINE = {
     "EMBEDDING_MODEL": env(
         "EMBEDDING_MODEL", default="paraphrase-multilingual-mpnet-base-v2"
     ),
     "UMBRAL_DUPLICIDAD": env.float("UMBRAL_DUPLICIDAD", default=0.85),
-    "UMBRAL_DIVERGENCIA": env.float("UMBRAL_DIVERGENCIA", default=0.80),
     "UMBRAL_CLONACION_TEXTUAL": env.float("UMBRAL_CLONACION_TEXTUAL", default=0.95),
 }
 
-# Ollama + Qwen2.5: usado exclusivamente para clasificacion metodologica,
-# resolucion de casos ambiguos, y generacion de explicaciones de hallazgos.
-# Nunca para el calculo de similitud semantica (eso es responsabilidad de
-# NLP_ENGINE / sentence-transformers).
-OLLAMA = {
-    "HOST": env("OLLAMA_HOST", default="http://localhost:11434"),
-    "MODEL": env("OLLAMA_MODEL", default="qwen2.5:7b"),
-    "TIMEOUT_SECONDS": env.int("OLLAMA_TIMEOUT_SECONDS", default=120),
-}
 
 # Bandera de "operabilidad local": el prototipo no debe requerir, para
 # operar, que los datos institucionales salgan de la infraestructura propia.
@@ -143,11 +133,19 @@ OLLAMA = {
 # trazabilidad (ver apps.gobernanza.models.EjecucionAuditoria).
 EJECUCION_100_POR_CIENTO_LOCAL = True
 
-# Celery (procesamiento asincrono de embeddings por lote y llamadas al LLM,
-# para no bloquear el ciclo request/response de Django).
-CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://localhost:6379/0")
-CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default="redis://localhost:6379/0")
-CELERY_ACCEPT_CONTENT = ["json"]
-CELERY_TASK_SERIALIZER = "json"
-CELERY_RESULT_SERIALIZER = "json"
-CELERY_TIMEZONE = TIME_ZONE
+# Privacidad: los reportes institucionales pueden traer datos personales (por
+# ejemplo, nombres y documentos de contratistas) en columnas que el prototipo no
+# usa. Por defecto, el archivo original se elimina del disco apenas se procesa;
+# el historial conserva su nombre, fecha y resultado. Active la conservacion solo
+# si necesita volver a procesar el mismo archivo.
+CONSERVAR_ARCHIVO_ORIGINAL = env.bool("CONSERVAR_ARCHIVO_ORIGINAL", default=False)
+
+# Autenticacion: el auditor y el administrador ingresan con usuario y contrasena.
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "dashboard:inicio"
+LOGOUT_REDIRECT_URL = "login"
+
+# Las etiquetas de mensajes de Django coinciden con las clases de alerta de Bootstrap.
+from django.contrib.messages import constants as _mensajes  # noqa: E402
+
+MESSAGE_TAGS = {_mensajes.ERROR: "danger"}

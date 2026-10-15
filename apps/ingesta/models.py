@@ -41,7 +41,11 @@ class CargaArchivo(models.Model):
         ("fallido", "Fallido"),
     ]
 
-    archivo = models.FileField(upload_to="cargas/")
+    archivo = models.FileField(
+        upload_to="cargas/", blank=True,
+        help_text="Archivo original; se elimina tras procesarlo salvo que CONSERVAR_ARCHIVO_ORIGINAL esté activo.",
+    )
+    nombre_archivo = models.CharField(max_length=255, blank=True, help_text="Nombre con el que se cargó el archivo.")
     plantilla = models.ForeignKey(PlantillaMapeoColumnas, on_delete=models.PROTECT)
     vigencia = models.CharField(max_length=9)
     cargado_por = models.ForeignKey(
@@ -52,6 +56,10 @@ class CargaArchivo(models.Model):
     filas_totales = models.PositiveIntegerField(default=0)
     filas_cargadas = models.PositiveIntegerField(default=0)
     filas_con_error = models.PositiveIntegerField(default=0)
+    filas_sin_indicador = models.PositiveIntegerField(
+        default=0,
+        help_text="Filas del archivo sin nombre de indicador (por ejemplo, líneas del PAA sin indicador asociado); se omiten y no son un error.",
+    )
     detalle_errores = models.JSONField(default=list, blank=True)
 
     class Meta:
@@ -125,7 +133,10 @@ class Indicador(models.Model):
             "nombre", "objetivo", "formula", "unidad_medida",
             "linea_base", "meta", "periodicidad", "fuente", "responsable",
         ]
-        return {campo: bool(getattr(self, campo)) for campo in campos_exigidos}
+        return {
+            campo: bool(getattr(self, campo)) and getattr(self, campo) != "no_especificada"
+            for campo in campos_exigidos
+        }
 
 
 class LineaPAA(models.Model):

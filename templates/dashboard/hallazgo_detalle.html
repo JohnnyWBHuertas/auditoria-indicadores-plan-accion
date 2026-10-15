@@ -20,19 +20,66 @@
             <dt class="col-sm-3">Parámetro de gobernanza</dt>
             <dd class="col-sm-9">{{ hallazgo.regla_aplicada.parametro_gobernanza.nombre }}</dd>
 
-            <dt class="col-sm-3">Score de similitud</dt>
-            <dd class="col-sm-9">{% if hallazgo.score_similitud %}{{ hallazgo.score_similitud|floatformat:4 }}{% else %}No aplica{% endif %}</dd>
-
             <dt class="col-sm-3">Evidencia</dt>
             <dd class="col-sm-9">{{ hallazgo.evidencia }}</dd>
 
-            <dt class="col-sm-3">Atributos comparados</dt>
-            <dd class="col-sm-9"><pre class="bg-light p-2 small">{{ hallazgo.atributos_comparados }}</pre></dd>
+            <dt class="col-sm-3">Qué se comparó</dt>
+            <dd class="col-sm-9">
+                <p class="mb-2">{{ detalle.explicacion }}</p>
 
-            {% if hallazgo.explicacion_llm %}
-            <dt class="col-sm-3">Explicación (Qwen2.5)</dt>
-            <dd class="col-sm-9 fst-italic">{{ hallazgo.explicacion_llm }}</dd>
-            {% endif %}
+                {% for etiqueta, valor in detalle.medidas %}
+                    <div class="mb-1"><span class="text-muted">{{ etiqueta }}:</span> <strong>{{ valor }}</strong></div>
+                {% endfor %}
+
+                {% if detalle.filas %}
+                <div class="table-responsive mt-2">
+                    <table class="table table-sm table-bordered bg-white align-middle mb-2">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 22%">Atributo</th>
+                                <th>Indicador principal (#{{ hallazgo.indicador_principal_id }})</th>
+                                <th>Indicador relacionado (#{{ hallazgo.indicador_relacionado_id }})</th>
+                                <th style="width: 12%" class="text-center">Resultado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for fila in detalle.filas %}
+                            <tr class="{% if not fila.igual %}table-warning{% endif %}">
+                                <td class="fw-semibold">{{ fila.etiqueta }}</td>
+                                <td>{{ fila.a }}</td>
+                                <td>{{ fila.b }}</td>
+                                <td class="text-center">
+                                    {% if fila.igual %}<span class="text-muted">Igual</span>{% else %}<strong>Diferente</strong>{% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+
+                {% if detalle.faltantes or detalle.diligenciados %}
+                <div class="row mt-2">
+                    <div class="col-md-6">
+                        <div class="fw-semibold text-danger mb-1">Atributos que faltan ({{ detalle.faltantes|length }})</div>
+                        <ul class="mb-2">
+                            {% for atributo in detalle.faltantes %}<li>{{ atributo }}</li>{% endfor %}
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="fw-semibold text-success mb-1">Atributos diligenciados ({{ detalle.diligenciados|length }})</div>
+                        <ul class="mb-2">
+                            {% for atributo in detalle.diligenciados %}<li>{{ atributo }}</li>{% endfor %}
+                        </ul>
+                    </div>
+                </div>
+                {% endif %}
+
+                <details class="mt-2">
+                    <summary class="small text-muted">Ver datos técnicos guardados (para trazabilidad)</summary>
+                    <pre class="bg-light p-2 small mt-1">{{ hallazgo.atributos_comparados }}</pre>
+                </details>
+            </dd>
         </dl>
 
         <h2 class="h6 mt-4">Indicador(es) involucrado(s)</h2>
@@ -60,6 +107,27 @@
             <div class="col-md-4 d-flex gap-2 align-items-start">
                 <button type="submit" name="accion" value="confirmar" class="btn btn-success btn-sm">Confirmar hallazgo</button>
                 <button type="submit" name="accion" value="descartar" class="btn btn-outline-secondary btn-sm">Descartar</button>
+            </div>
+        </form>
+        <hr>
+        <h2 class="h6">Correspondencia con la caracterización manual</h2>
+        <form method="post" class="row g-2">
+            {% csrf_token %}
+            <input type="hidden" name="accion" value="correspondencia">
+            <div class="col-md-4">
+                <select name="tipo_correspondencia" class="form-select form-select-sm" required>
+                    <option value="">Sin registrar…</option>
+                    {% for valor, etiqueta in correspondencia_choices %}
+                        <option value="{{ valor }}" {% if correspondencia.tipo_correspondencia == valor %}selected{% endif %}>{{ etiqueta }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <input type="text" name="observacion_correspondencia" class="form-control form-control-sm"
+                       placeholder="Observación (opcional)" value="{{ correspondencia.observacion|default:'' }}">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-outline-primary btn-sm">Registrar</button>
             </div>
         </form>
         {% if hallazgo.revisado_en %}

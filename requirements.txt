@@ -1,25 +1,17 @@
-Django>=5.0,<5.3
-psycopg[binary]>=3.1
-django-environ>=0.11
-truststore>=0.9
+# Prototipo de auditoria de indicadores del Plan de Accion (Python 3.12)
+# Las versiones corresponden a la Tabla 3 de la monografia (Stack tecnologico).
 
-# Ingesta de archivos
-pandas>=2.2
-openpyxl>=3.1
+# Aplicacion web monolitica modular
+Django~=5.2.0
+django-environ~=0.14
+psycopg[binary]~=3.3      # PostgreSQL (SQLite solo para las pruebas funcionales)
+truststore~=0.10          # certificados del sistema operativo en la primera descarga del modelo
 
-# Motor de embeddings y similitud semantica (Reimers & Gurevych, 2019)
-# independiente del LLM, ejecutado 100% local
-sentence-transformers>=3.0
-torch>=2.2
+# Ingesta (Excel/CSV) y exportacion de hallazgos
+openpyxl~=3.1
 
-# Cliente Ollama (Qwen2.5) para clasificacion metodologica,
-# casos ambiguos y explicacion de hallazgos
-ollama>=0.3
-
-# Procesamiento asincrono (embeddings por lote, llamadas al LLM)
-celery>=5.4
-redis>=5.0
-
-# Exportacion de reportes
-openpyxl>=3.1
-reportlab>=4.2
+# Motor de embeddings y similitud semantica, ejecutado localmente
+# (Reimers & Gurevych, 2019): paraphrase-multilingual-mpnet-base-v2
+sentence-transformers~=6.1
+torch~=2.14
+numpy>=2.0
