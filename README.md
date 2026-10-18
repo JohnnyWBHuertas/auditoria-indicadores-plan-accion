@@ -51,7 +51,7 @@ Para probar con reportes reales, cargue su archivo en *Cargar archivo* con una p
 python -m venv .venv
 .venv\Scripts\activate          # Windows
 pip install -r requirements.txt
-copy .env.example .env          # y ajuste DATABASE_URL (o active USE_SQLITE_LOCAL)
+copy .env.example .env          # usa SQLite por defecto; para PostgreSQL ajuste DATABASE_URL
 python manage.py migrate
 ```
 
