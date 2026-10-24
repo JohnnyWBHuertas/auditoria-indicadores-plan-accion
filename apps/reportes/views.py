@@ -1,12 +1,12 @@
-from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 
 from apps.auditoria.models import Hallazgo
+from apps.gobernanza.permisos import requiere_permiso
 
 
-@login_required
+@requiere_permiso("auditoria.view_hallazgo")
 def exportar_excel(request):
     """CU5 (cierre): exporta el listado de hallazgos con su evidencia asociada."""
     qs = Hallazgo.objects.select_related(

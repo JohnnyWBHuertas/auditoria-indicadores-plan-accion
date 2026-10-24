@@ -2,7 +2,6 @@
 
 from collections import Counter, defaultdict
 
-from django.contrib.auth.decorators import login_required
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, render
 
@@ -11,11 +10,12 @@ from apps.auditoria.presentacion import ETIQUETAS
 from apps.auditoria.reglas import es_trazable
 from apps.gobernanza.models import EjecucionAuditoria, ParametroGobernanza
 from apps.ingesta.models import Indicador
+from apps.gobernanza.permisos import requiere_permiso
 
 LIMITE = 300
 
 
-@login_required
+@requiere_permiso("gobernanza.view_ejecucionauditoria")
 def parametros(request, pk):
     """Variable 1: matriz parametro -> regla -> hallazgos."""
     ejecucion = get_object_or_404(EjecucionAuditoria, pk=pk)
@@ -45,7 +45,7 @@ def parametros(request, pk):
     })
 
 
-@login_required
+@requiere_permiso("gobernanza.view_ejecucionauditoria")
 def correspondencia(request, pk):
     """Variable 3: avance del contraste con la caracterizacion manual."""
     ejecucion = get_object_or_404(EjecucionAuditoria, pk=pk)
@@ -78,7 +78,7 @@ def correspondencia(request, pk):
     })
 
 
-@login_required
+@requiere_permiso("gobernanza.view_ejecucionauditoria")
 def trazabilidad(request, pk):
     """Variable 4: cada hallazgo informa regla, atributos comparados y evidencia."""
     ejecucion = get_object_or_404(EjecucionAuditoria, pk=pk)
@@ -105,7 +105,7 @@ def _pct(parte, total):
     return round(parte * 100 / total) if total else 0
 
 
-@login_required
+@requiere_permiso("gobernanza.view_ejecucionauditoria")
 def completitud(request, pk):
     """Variable 5: que atributos de la hoja de vida faltan, en que dependencias."""
     ejecucion = get_object_or_404(EjecucionAuditoria, pk=pk)

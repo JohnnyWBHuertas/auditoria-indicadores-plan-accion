@@ -1,13 +1,14 @@
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
+
+from apps.gobernanza.permisos import requiere_permiso
 
 from .forms import CargaArchivoForm
 from .models import CargaArchivo
 from .services import procesar_archivo
 
 
-@login_required
+@requiere_permiso("ingesta.add_cargaarchivo")
 def cargar_archivo(request):
     """CU1: cargar el reporte de una vigencia y normalizar la hoja de vida,
     verificando que la estructura se preserve (ver CargaArchivo.filas_*)."""
@@ -34,7 +35,7 @@ def cargar_archivo(request):
     return render(request, "ingesta/cargar.html", {"form": form})
 
 
-@login_required
+@requiere_permiso("ingesta.view_cargaarchivo")
 def historial(request):
     cargas = CargaArchivo.objects.select_related("plantilla").order_by("-cargado_en")[:50]
     return render(request, "ingesta/historial.html", {"cargas": cargas})

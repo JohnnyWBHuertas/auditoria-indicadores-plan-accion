@@ -7,6 +7,7 @@
     <span class="badge bg-success">Ejecución 100% local</span>
 </div>
 
+{% if perms.gobernanza.add_ejecucionauditoria %}
 <div class="card mb-4">
     <div class="card-body">
         <h2 class="h6">Ejecutar auditoría sobre una vigencia</h2>
@@ -30,6 +31,7 @@
         </form>
     </div>
 </div>
+{% endif %}
 
 {% if ultima_ejecucion %}
     <h2 class="h5">Última ejecución — vigencia {{ ultima_ejecucion.vigencia }}

@@ -2,6 +2,7 @@ import io
 from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
@@ -12,11 +13,19 @@ from apps.auditoria.reglas import ejecutar_auditoria
 from apps.nlp_engine import embeddings as nlp
 
 
+def usuario_con_rol(nombre, rol="Auditor"):
+    """Crea un usuario y lo asigna a uno de los roles (grupos) del sistema."""
+    call_command("seed_roles", stdout=io.StringIO())
+    usuario = get_user_model().objects.create_user(nombre, password="x")
+    usuario.groups.add(Group.objects.get(name=rol))
+    return usuario
+
+
 class TableroTest(TestCase):
     def setUp(self):
         call_command("seed_catalogo_gobernanza", stdout=io.StringIO())
         call_command("seed_datos_demo", stdout=io.StringIO())
-        self.usuario = get_user_model().objects.create_user("auditor1", password="x")
+        self.usuario = usuario_con_rol("auditor1")
         with mock.patch.object(nlp, "generar_embeddings_pendientes", lambda: 0), \
                 mock.patch.object(nlp, "generar_pares_candidatos", validacion._pares_simulados):
             self.ejecucion = ejecutar_auditoria("2026", usuario=self.usuario)
@@ -113,7 +122,7 @@ class DetalleLegibleTest(TestCase):
     def setUp(self):
         call_command("seed_catalogo_gobernanza", stdout=io.StringIO())
         call_command("seed_datos_demo", stdout=io.StringIO())
-        self.usuario = get_user_model().objects.create_user("auditor2", password="x")
+        self.usuario = usuario_con_rol("auditor2")
         with mock.patch.object(nlp, "generar_embeddings_pendientes", lambda: 0), \
                 mock.patch.object(nlp, "generar_pares_candidatos", validacion._pares_simulados):
             ejecutar_auditoria("2026", usuario=self.usuario)
@@ -158,7 +167,7 @@ class DetalleDeVariablesTest(TestCase):
     def setUp(self):
         call_command("seed_catalogo_gobernanza", stdout=io.StringIO())
         call_command("seed_datos_demo", stdout=io.StringIO())
-        self.usuario = get_user_model().objects.create_user("auditor3", password="x")
+        self.usuario = usuario_con_rol("auditor3")
         with mock.patch.object(nlp, "generar_embeddings_pendientes", lambda: 0), \
                 mock.patch.object(nlp, "generar_pares_candidatos", validacion._pares_simulados):
             self.ejecucion = ejecutar_auditoria("2026", usuario=self.usuario)
@@ -225,7 +234,7 @@ class CompararVigenciasTest(TestCase):
         from apps.gobernanza.models import Dependencia, EjecucionAuditoria
         from apps.ingesta.models import Indicador
 
-        self.usuario = get_user_model().objects.create_user("auditor4", password="x")
+        self.usuario = usuario_con_rol("auditor4")
         self.client.force_login(self.usuario)
         dep = Dependencia.objects.create(nombre="Dep")
         call_command("seed_catalogo_gobernanza", stdout=io.StringIO())
@@ -328,3 +337,51 @@ class CompararVigenciasTest(TestCase):
     def test_ignora_vigencias_inexistentes(self):
         r = self._get("2025", "1999")
         self.assertEqual([f["vigencia"] for f in r.context["filas"]], ["2025"])
+
+
+class ControlDeAccesoPorRolTest(TestCase):
+    """RBAC: cada rol (grupo) solo accede a las funcionalidades de sus permisos."""
+
+    def setUp(self):
+        call_command("seed_catalogo_gobernanza", stdout=io.StringIO())
+        call_command("seed_datos_demo", stdout=io.StringIO())
+        self.auditor = usuario_con_rol("rol_auditor", "Auditor")
+        self.consulta = usuario_con_rol("rol_consulta", "Consulta")
+        self.admin = usuario_con_rol("rol_admin", "Administrador")
+        with mock.patch.object(nlp, "generar_embeddings_pendientes", lambda: 0), \
+                mock.patch.object(nlp, "generar_pares_candidatos", validacion._pares_simulados):
+            self.ejecucion = ejecutar_auditoria("2026", usuario=self.auditor)
+        self.hallazgo = Hallazgo.objects.filter(ejecucion=self.ejecucion).first()
+
+    def test_consulta_puede_ver_pero_no_operar(self):
+        self.client.force_login(self.consulta)
+        for nombre in ("dashboard:inicio", "dashboard:hallazgos", "dashboard:comparar", "ingesta:historial", "reportes:exportar_excel"):
+            self.assertEqual(self.client.get(reverse(nombre)).status_code, 200, nombre)
+        self.assertEqual(self.client.get(reverse("ingesta:cargar")).status_code, 403)
+        self.assertEqual(self.client.post(reverse("dashboard:inicio"), {"accion": "ejecutar_auditoria", "vigencia": "2026"}).status_code, 403)
+        url = reverse("dashboard:hallazgo_detalle", args=[self.hallazgo.pk])
+        self.assertEqual(self.client.post(url, {"accion": "confirmar"}).status_code, 403)
+        self.hallazgo.refresh_from_db()
+        self.assertEqual(self.hallazgo.estado, "pendiente")
+
+    def test_auditor_carga_audita_y_revisa(self):
+        self.client.force_login(self.auditor)
+        self.assertEqual(self.client.get(reverse("ingesta:cargar")).status_code, 200)
+        url = reverse("dashboard:hallazgo_detalle", args=[self.hallazgo.pk])
+        self.assertEqual(self.client.post(url, {"accion": "confirmar", "observacion": "ok"}).status_code, 302)
+        self.hallazgo.refresh_from_db()
+        self.assertEqual(self.hallazgo.estado, "confirmado")
+        self.assertEqual(self.hallazgo.revisado_por, self.auditor)
+
+    def test_solo_el_administrador_entra_a_la_administracion(self):
+        self.admin.is_staff = True
+        self.admin.save()
+        self.client.force_login(self.auditor)
+        self.assertEqual(self.client.get("/admin/").status_code, 302)  # no es personal del sitio
+        self.client.force_login(self.admin)
+        self.assertEqual(self.client.get("/admin/").status_code, 200)
+
+    def test_pagina_403_es_comprensible(self):
+        self.client.force_login(self.consulta)
+        respuesta = self.client.get(reverse("ingesta:cargar"))
+        self.assertContains(respuesta, "No tiene permiso para esta acción", status_code=403)

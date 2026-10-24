@@ -97,6 +97,7 @@
         </div>
     </div>
     <div class="card-footer">
+        {% if perms.auditoria.change_hallazgo %}
         <h2 class="h6">Revisión del auditor (el hallazgo no se aplica de forma autónoma)</h2>
         <form method="post" class="row g-2">
             {% csrf_token %}
@@ -130,6 +131,9 @@
                 <button type="submit" class="btn btn-outline-primary btn-sm">Registrar</button>
             </div>
         </form>
+        {% else %}
+        <p class="text-muted small mb-2">Su rol es de solo consulta: puede ver el hallazgo, pero no confirmarlo ni descartarlo.</p>
+        {% endif %}
         {% if hallazgo.revisado_en %}
             <div class="text-muted small mt-2">Revisado por {{ hallazgo.revisado_por|default:"—" }} el {{ hallazgo.revisado_en }}.</div>
         {% endif %}

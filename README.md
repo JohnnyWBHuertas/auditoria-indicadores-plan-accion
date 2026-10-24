@@ -59,12 +59,12 @@ python manage.py migrate
 
 ```bash
 python manage.py seed_catalogo_gobernanza   # 11 parámetros y 5 reglas de auditoría
-python manage.py seed_roles --usuarios --password <clave>   # grupos Auditor y Administrador + usuarios de demostración
+python manage.py seed_roles --usuarios --password <clave>   # grupos Administrador, Auditor y Consulta + usuarios de demostración
 python manage.py seed_plantilla_demo        # plantilla de mapeo del conjunto de control
 python manage.py runserver
 ```
 
-Ingrese en <http://localhost:8000/> con el usuario `auditor` o `administrador`.
+Ingrese en <http://localhost:8000/> con el usuario `auditor`, `administrador` o `consulta`.
 
 Flujo de uso (cinco casos de uso):
 
@@ -73,7 +73,15 @@ Flujo de uso (cinco casos de uso):
 3. **CU5** Consulte los hallazgos, revíselos (confirmar o descartar), registre la correspondencia con la caracterización manual y exporte a Excel.
 4. **Comparar vigencias** (menú superior): seleccione una o varias vigencias y vea sus indicadores, hallazgos (de la última auditoría de cada una), la variación porcentual entre ellas y una gráfica.
 
-El administrador configura plantillas de mapeo, parámetros y reglas desde `/admin/`.
+El acceso es por roles (RBAC), con permisos de Django asignados a tres grupos:
+
+| Rol | Puede |
+|---|---|
+| **Administrador** | Todo lo del auditor y, además, configurar plantillas de mapeo, parámetros y reglas desde `/admin/` |
+| **Auditor** | Cargar reportes, ejecutar la auditoría, confirmar o descartar hallazgos, registrar la correspondencia, comparar vigencias y exportar |
+| **Consulta** | Solo lectura: tablero, hallazgos, comparación de vigencias y exportación |
+
+Un rol sin el permiso recibe una página 403; las opciones que no le corresponden no aparecen en el menú.
 
 ## Validación funcional
 

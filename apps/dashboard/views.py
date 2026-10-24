@@ -1,5 +1,5 @@
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -8,6 +8,7 @@ from apps.auditoria.models import CorrespondenciaManual, Hallazgo
 from apps.auditoria.presentacion import presentar
 from apps.auditoria.reglas import conteo_correspondencia, ejecutar_auditoria
 from apps.gobernanza.models import Dependencia, EjecucionAuditoria
+from apps.gobernanza.permisos import requiere_permiso
 from apps.nlp_engine.embeddings import ModeloNoDisponible
 from apps.ingesta.models import Indicador
 
@@ -16,7 +17,7 @@ def _porcentaje(proporcion):
     return None if proporcion is None else round(proporcion * 100)
 
 
-@login_required
+@requiere_permiso("gobernanza.view_ejecucionauditoria")
 def inicio(request):
     """CU5 (parte 1): consulta de resultados en el tablero."""
     ultima_ejecucion = EjecucionAuditoria.objects.order_by("-iniciada_en", "-pk").first()
@@ -25,6 +26,8 @@ def inicio(request):
     )
 
     if request.method == "POST" and request.POST.get("accion") == "ejecutar_auditoria":
+        if not request.user.has_perm("gobernanza.add_ejecucionauditoria"):
+            raise PermissionDenied
         vigencia = request.POST.get("vigencia")
         if vigencia:
             try:
@@ -60,7 +63,7 @@ def inicio(request):
     return render(request, "dashboard/inicio.html", contexto)
 
 
-@login_required
+@requiere_permiso("auditoria.view_hallazgo")
 def hallazgos(request):
     """CU5 (parte 2): listado filtrable de hallazgos con su evidencia."""
     qs = Hallazgo.objects.select_related(
@@ -96,7 +99,7 @@ def hallazgos(request):
     return render(request, "dashboard/hallazgos.html", contexto)
 
 
-@login_required
+@requiere_permiso("auditoria.view_hallazgo")
 def hallazgo_detalle(request, pk):
     hallazgo = get_object_or_404(
         Hallazgo.objects.select_related(
@@ -108,6 +111,8 @@ def hallazgo_detalle(request, pk):
     if request.method == "POST":
         accion = request.POST.get("accion")
         if accion in {"confirmar", "descartar"}:
+            if not request.user.has_perm("auditoria.change_hallazgo"):
+                raise PermissionDenied
             hallazgo.estado = "confirmado" if accion == "confirmar" else "descartado"
             hallazgo.revisado_por = request.user
             hallazgo.revisado_en = timezone.now()
@@ -116,6 +121,8 @@ def hallazgo_detalle(request, pk):
             messages.success(request, "Hallazgo actualizado.")
             return redirect("dashboard:hallazgo_detalle", pk=pk)
         if accion == "correspondencia":
+            if not request.user.has_perms(["auditoria.add_correspondenciamanual", "auditoria.change_correspondenciamanual"]):
+                raise PermissionDenied
             tipo = request.POST.get("tipo_correspondencia")
             if tipo in dict(CorrespondenciaManual.TIPO_CHOICES):
                 CorrespondenciaManual.objects.update_or_create(

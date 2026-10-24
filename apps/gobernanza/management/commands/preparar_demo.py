@@ -57,5 +57,5 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(
             "\nListo. Inicie el servidor con «python manage.py runserver» e ingrese en http://localhost:8000/ "
-            f"con el usuario «auditor» o «administrador» (contraseña «{options['password']}»)."
+            f"con el usuario «auditor», «administrador» o «consulta» (contraseña «{options['password']}»)."
         ))

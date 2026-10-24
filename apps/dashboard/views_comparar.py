@@ -1,11 +1,11 @@
 """Comparacion de vigencias: indicadores, hallazgos y variacion entre ellas."""
 
-from django.contrib.auth.decorators import login_required
 from django.db.models import Count
 from django.shortcuts import render
 
 from apps.auditoria.models import Hallazgo
 from apps.gobernanza.models import EjecucionAuditoria
+from apps.gobernanza.permisos import requiere_permiso
 from apps.ingesta.models import Indicador
 
 
@@ -51,7 +51,7 @@ def resumen_por_vigencia(vigencias):
     return filas
 
 
-@login_required
+@requiere_permiso("gobernanza.view_ejecucionauditoria")
 def comparar(request):
     disponibles = list(Indicador.objects.order_by("vigencia").values_list("vigencia", flat=True).distinct())
     seleccion = sorted(v for v in set(request.GET.getlist("vigencias")) if v in disponibles)

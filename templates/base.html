@@ -32,7 +32,9 @@
                 <li class="nav-item"><a class="nav-link" href="{% url 'dashboard:inicio' %}">Tablero</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'dashboard:hallazgos' %}">Hallazgos</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'dashboard:comparar' %}">Comparar vigencias</a></li>
+                {% if perms.ingesta.add_cargaarchivo %}
                 <li class="nav-item"><a class="nav-link" href="{% url 'ingesta:cargar' %}">Cargar archivo</a></li>
+                {% endif %}
                 {% if user.is_staff %}
                 <li class="nav-item"><a class="nav-link" href="/admin/">Administración</a></li>
                 {% endif %}
@@ -40,7 +42,7 @@
             {% if user.is_authenticated %}
             <form method="post" action="{% url 'logout' %}" class="d-flex align-items-center gap-2 mb-0">
                 {% csrf_token %}
-                <span class="navbar-text small">{{ user.get_full_name|default:user.username }}</span>
+                <span class="navbar-text small">{{ user.get_full_name|default:user.username }}{% for g in user.groups.all %} · {{ g.name }}{% endfor %}</span>
                 <button type="submit" class="btn btn-outline-light btn-sm">Salir</button>
             </form>
             {% endif %}

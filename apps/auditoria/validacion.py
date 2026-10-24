@@ -23,6 +23,7 @@ from unittest import mock
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.contrib.auth.models import AnonymousUser
 from django.core.files.base import ContentFile
 from django.core.management import call_command
@@ -170,7 +171,9 @@ def _casos(usar_modelo: bool) -> list[dict]:
     ))
 
     # --- CU2-CU4: auditoria -------------------------------------------------
+    call_command("seed_roles", stdout=io.StringIO())
     usuario = get_user_model().objects.create_user("validador", password=None)
+    usuario.groups.add(Group.objects.get(name="Auditor"))
     if usar_modelo:
         ejecucion = ejecutar_auditoria(VIGENCIA, usuario=usuario)
     else:
@@ -305,10 +308,23 @@ def _casos(usar_modelo: bool) -> list[dict]:
     anonima = RequestFactory(SERVER_NAME="localhost").get("/hallazgos/")
     anonima.user = AnonymousUser()
     resp = vista_hallazgos(anonima)
+    from django.core.exceptions import PermissionDenied
+    from apps.ingesta.views import cargar_archivo as vista_cargar
+    consulta = get_user_model().objects.create_user("validador_consulta", password=None)
+    consulta.groups.add(Group.objects.get(name="Consulta"))
+    sin_permiso = RequestFactory(SERVER_NAME="localhost").get("/ingesta/cargar/")
+    sin_permiso.user = consulta
+    try:
+        vista_cargar(sin_permiso)
+        denegado = False
+    except PermissionDenied:
+        denegado = True
     filas.append(_fila(
-        "CP-18", "Seguridad de acceso", "Autenticación obligatoria",
-        "Solicitud al listado de hallazgos sin sesión", "Redirección a la página de ingreso",
-        f"Código {resp.status_code}; destino {resp.url}", resp.status_code == 302 and resp.url.startswith(reverse("login")),
+        "CP-18", "Seguridad de acceso (RBAC)", "Autenticación obligatoria y permisos por rol",
+        "Listado de hallazgos sin sesión; carga de archivo con un usuario de rol Consulta",
+        "Redirección a la página de ingreso; acceso denegado (403) al rol Consulta",
+        f"Código {resp.status_code} hacia el ingreso; rol Consulta {'denegado (403)' if denegado else 'permitido'}",
+        resp.status_code == 302 and resp.url.startswith(reverse("login")) and denegado,
     ))
 
     filas.append(_fila(
