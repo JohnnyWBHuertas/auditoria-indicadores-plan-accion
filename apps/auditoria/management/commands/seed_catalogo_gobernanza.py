@@ -41,7 +41,7 @@ PARAMETROS = [
         descripcion="Indicadores semánticamente equivalentes deben compartir unidad de medida y periodicidad.",
         fuente_bibliografica="ISO/IEC 25012 (2008); Batini et al. (2009)",
         operacionalizacion="si",
-        implementacion="Regla de divergencia operativa; la fórmula, al ser texto libre, no se compara por igualdad exacta.",
+        implementacion="Regla de divergencia operativa: compara unidad de medida y periodicidad solo cuando ambos valores están presentes; si falta uno lo registra como valor faltante. La fórmula, al ser texto libre, no se compara por igualdad exacta.",
     ),
     dict(
         codigo="P06", nombre="Completitud de la hoja de vida", categoria="calidad",
@@ -103,7 +103,7 @@ REGLAS = [
     dict(
         nombre="Equivalencia semántica con atributos técnicos divergentes",
         tipo_hallazgo="divergencia_operativa",
-        descripcion="Marca como divergencia operativa los pares semánticamente equivalentes que difieren en unidad de medida o periodicidad (la fórmula, al ser texto libre, no se usa como disparador exacto).",
+        descripcion="Marca como divergencia operativa los pares semánticamente equivalentes con unidad de medida o periodicidad distintas, estando ambos valores presentes; si falta uno de los valores registra el subresultado «valor faltante» y no una divergencia (la fórmula, al ser texto libre, no se usa como disparador exacto).",
         parametro_codigo="P05",
     ),
     dict(

@@ -31,7 +31,13 @@ def get_embedding_model():
         try:
             from sentence_transformers import SentenceTransformer
 
-            _modelo_cargado = SentenceTransformer(settings.NLP_ENGINE["EMBEDDING_MODEL"])
+            nombre = settings.NLP_ENGINE["EMBEDDING_MODEL"]
+            try:
+                # Operabilidad local: si el modelo ya esta en el almacen local no se consulta la red.
+                _modelo_cargado = SentenceTransformer(nombre, local_files_only=True)
+            except (OSError, ValueError):
+                # Primera ejecucion: unica vez que se descarga el modelo.
+                _modelo_cargado = SentenceTransformer(nombre)
         except (ImportError, OSError) as exc:
             raise ModeloNoDisponible(
                 f"No fue posible cargar el modelo de embeddings ({settings.NLP_ENGINE['EMBEDDING_MODEL']}): {str(exc).rstrip('. ')}. "

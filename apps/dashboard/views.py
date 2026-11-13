@@ -6,11 +6,15 @@ from django.utils import timezone
 
 from apps.auditoria.models import CorrespondenciaManual, Hallazgo
 from apps.auditoria.presentacion import presentar
+from apps.auditoria.agrupacion import resumen_agrupacion
+from apps.auditoria.consultas import filtrar_por_tipo, opciones_de_tipo
 from apps.auditoria.reglas import conteo_correspondencia, ejecutar_auditoria
 from apps.gobernanza.models import Dependencia, EjecucionAuditoria
 from apps.gobernanza.permisos import requiere_permiso
 from apps.nlp_engine.embeddings import ModeloNoDisponible
 from apps.ingesta.models import Indicador
+
+from .calidad import datos_calidad
 
 
 def _porcentaje(proporcion):
@@ -60,6 +64,20 @@ def inicio(request):
                 .order_by("-total", "indicador_principal__dependencia__nombre")
             ),
         )
+        calidad = datos_calidad(ultima_ejecucion)
+        agrupacion = resumen_agrupacion(ultima_ejecucion)
+        contexto.update(
+            calidad=calidad,
+            agrupacion={k: agrupacion[k] for k in (
+                "pares_individuales", "grupos_transversales", "grupos_en_dependencia", "pares_sueltos", "unidades_de_revision")},
+            datos_graficas={
+                "completitud": {"etiquetas": [c["etiqueta"] for c in calidad["completitud"]], "valores": [c["porcentaje"] for c in calidad["completitud"]]},
+                "tipos": {"etiquetas": list(calidad["por_tipo"].keys()), "valores": list(calidad["por_tipo"].values())},
+                "dependencias": {"etiquetas": [d["nombre"] for d in calidad["dependencias"]], "valores": [d["total"] for d in calidad["dependencias"]]},
+                "revision": {"etiquetas": ["Pendiente", "Confirmado", "Descartado"],
+                             "valores": [calidad["por_estado"]["pendiente"], calidad["por_estado"]["confirmado"], calidad["por_estado"]["descartado"]]},
+            },
+        )
     return render(request, "dashboard/inicio.html", contexto)
 
 
@@ -74,8 +92,7 @@ def hallazgos(request):
     estado = request.GET.get("estado")
     dependencia = request.GET.get("dependencia")
     ejecucion = request.GET.get("ejecucion")
-    if tipo:
-        qs = qs.filter(tipo=tipo)
+    qs = filtrar_por_tipo(qs, tipo)
     if estado:
         qs = qs.filter(estado=estado)
     if dependencia:
@@ -89,7 +106,7 @@ def hallazgos(request):
         "total": qs.count(),
         "ejecucion_seleccionada": ejecucion_seleccionada,
         "hallazgos": qs[:300],
-        "tipo_choices": Hallazgo._meta.get_field("tipo").choices,
+        "tipo_choices": opciones_de_tipo(Hallazgo._meta.get_field("tipo").choices),
         "estado_choices": Hallazgo.ESTADO_CHOICES,
         "dependencias": Dependencia.objects.all(),
         "tipo_seleccionado": tipo,

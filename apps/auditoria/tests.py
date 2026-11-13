@@ -20,8 +20,8 @@ class MatrizDeValidacionTest(TestCase):
         super().setUpClass()
         cls.filas = validacion.ejecutar_matriz(usar_modelo=False)
 
-    def test_hay_diecinueve_casos(self):
-        self.assertEqual(len(self.filas), 19)
+    def test_hay_veintidos_casos(self):
+        self.assertEqual(len(self.filas), 22)
 
     def test_todos_los_casos_cumplen(self):
         incumplidos = [f"{f['caso']}: {f['obtenido']}" for f in self.filas if f["estado"] != "Cumple"]

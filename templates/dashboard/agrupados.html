@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Indicadores repetidos agrupados — Auditoría de Indicadores{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'dashboard:inicio' %}">Tablero</a></li>
+    <li class="breadcrumb-item active">Indicadores repetidos agrupados</li>
+</ol></nav>
+
+<h1 class="h3">Indicadores repetidos agrupados — vigencia {{ ejecucion.vigencia }}</h1>
+<p class="text-muted">
+    Los pares señalados cuyos dos indicadores tienen el mismo nombre se presentan como un solo grupo. No se elimina ni se modifica
+    ningún par ni hallazgo: el listado de hallazgos conserva todos los pares originales.
+</p>
+
+<div class="row row-cols-1 row-cols-md-4 g-3 mb-4">
+    <div class="col"><div class="card h-100"><div class="card-body">
+        <div class="text-muted small">Pares señalados (originales)</div>
+        <div class="fs-3" id="n-pares">{{ resumen.pares_individuales }}</div>
+    </div></div></div>
+    <div class="col"><div class="card h-100"><div class="card-body">
+        <div class="text-muted small">Grupos de nombre repetido</div>
+        <div class="fs-3">{{ resumen.grupos|length }}</div>
+        <div class="small text-muted">{{ resumen.pares_en_grupos }} pares dentro de grupos</div>
+    </div></div></div>
+    <div class="col"><div class="card h-100"><div class="card-body">
+        <div class="text-muted small">Pares con nombres distintos</div>
+        <div class="fs-3">{{ resumen.pares_sueltos }}</div>
+    </div></div></div>
+    <div class="col"><div class="card h-100 border-primary"><div class="card-body">
+        <div class="text-muted small">Unidades de revisión</div>
+        <div class="fs-3 text-primary" id="n-unidades">{{ resumen.unidades_de_revision }}</div>
+        <div class="small text-muted">grupos + pares con nombres distintos</div>
+    </div></div></div>
+</div>
+
+<div class="mb-3">
+    <a class="btn btn-sm {% if not clase_seleccionada %}btn-primary{% else %}btn-outline-primary{% endif %}" href="?">Todos ({{ resumen.grupos|length }})</a>
+    <a class="btn btn-sm {% if clase_seleccionada == 'transversal' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="?clase=transversal">Transversales ({{ resumen.grupos_transversales }})</a>
+    <a class="btn btn-sm {% if clase_seleccionada == 'repeticion_en_dependencia' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="?clase=repeticion_en_dependencia">Repetición dentro de una dependencia ({{ resumen.grupos_en_dependencia }})</a>
+</div>
+
+<table class="table table-sm bg-white">
+    <thead><tr><th>Indicador (nombre)</th><th>Clase</th><th class="text-end">Indicadores</th><th>Dependencias</th><th class="text-end">Pares señalados</th></tr></thead>
+    <tbody>
+    {% for g in grupos %}
+        <tr>
+            <td>{{ g.nombre }}</td>
+            <td>
+                {% if g.clase == "transversal" %}<span class="badge bg-secondary">Transversal</span>
+                {% else %}<span class="badge bg-warning text-dark">Posible clonación</span>{% endif %}
+            </td>
+            <td class="text-end">{{ g.indicadores }}</td>
+            <td class="small">{{ g.dependencias|length }}{% if g.dependencias|length <= 3 %}: {{ g.dependencias|join:"; " }}{% endif %}</td>
+            <td class="text-end">{{ g.pares }}</td>
+        </tr>
+    {% empty %}
+        <tr><td colspan="5" class="text-muted text-center">No hay grupos de indicadores con el mismo nombre en esta ejecución.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+<p class="small text-muted">
+    «Transversal»: el nombre se repite en dos o más dependencias; lo habitual es un indicador genérico que cada dependencia registra por su cuenta.
+    «Posible clonación»: el nombre se repite dentro de una sola dependencia y conviene revisarlo.
+</p>
+{% endblock %}

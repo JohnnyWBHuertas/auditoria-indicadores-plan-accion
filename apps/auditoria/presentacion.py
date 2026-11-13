@@ -80,10 +80,18 @@ def presentar(hallazgo) -> dict:
         r["filas"] = _tabla(at, ORDEN_CLONACION)
 
     elif hallazgo.tipo == "divergencia_operativa":
-        r["explicacion"] = (
-            "Los dos indicadores significan lo mismo, pero se miden de forma distinta: difieren en la unidad de "
-            "medida o en la periodicidad. Así no se pueden consolidar ni comparar directamente."
-        )
+        if at.get("clasificacion") == "valor_faltante":
+            r["explicacion"] = (
+                "Los dos indicadores significan lo mismo, pero a uno de ellos le falta la unidad de medida o la "
+                "periodicidad. Con un dato ausente no se puede afirmar que se midan de forma distinta: es un problema "
+                "de completitud y no una divergencia demostrada. El auditor puede descartarlo si el campo no aplica "
+                "a ese tipo de indicador."
+            )
+        else:
+            r["explicacion"] = (
+                "Los dos indicadores significan lo mismo, pero se miden de forma distinta: ambos tienen unidad de "
+                "medida y periodicidad, y esos valores no coinciden. Así no se pueden consolidar ni comparar directamente."
+            )
         r["medidas"] = [("Similitud de significado", _porcentaje(at.get("similitud_semantica")))]
         r["filas"] = _tabla(at, ["unidad_medida", "periodicidad"])
 

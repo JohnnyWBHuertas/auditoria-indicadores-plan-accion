@@ -6,7 +6,7 @@
 
 <div class="card mb-4">
     <div class="card-header d-flex justify-content-between">
-        <span><span class="badge badge-tipo-{{ hallazgo.tipo }}">{{ hallazgo.get_tipo_display }}</span> — Hallazgo #{{ hallazgo.pk }}</span>
+        <span><span class="badge badge-tipo-{{ hallazgo.clase_tipo }}">{{ hallazgo.tipo_etiqueta }}</span> — Hallazgo #{{ hallazgo.pk }}</span>
         <span class="badge bg-{% if hallazgo.estado == 'confirmado' %}success{% elif hallazgo.estado == 'descartado' %}secondary{% else %}warning text-dark{% endif %}">
             {{ hallazgo.get_estado_display }}
         </span>

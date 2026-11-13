@@ -27,7 +27,7 @@
     <tbody>
     {% for h in hallazgos %}
         <tr>
-            <td><span class="badge badge-tipo-{{ h.tipo }}">{{ h.get_tipo_display }}</span></td>
+            <td><span class="badge badge-tipo-{{ h.clase_tipo }}">{{ h.tipo_etiqueta }}</span></td>
             <td>{{ h.indicador_principal.nombre|truncatechars:80 }}</td>
             <td>{{ h.indicador_principal.dependencia.nombre|truncatechars:40 }}</td>
             <td>{{ h.get_estado_display }}</td>

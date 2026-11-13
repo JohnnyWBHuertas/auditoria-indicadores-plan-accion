@@ -38,7 +38,7 @@
 {% if excepciones %}
     <ul>
     {% for h in excepciones %}
-        <li><a href="{% url 'dashboard:hallazgo_detalle' h.pk %}">Hallazgo #{{ h.pk }}</a> — {{ h.get_tipo_display }}: {{ h.indicador_principal.nombre|truncatechars:80 }}</li>
+        <li><a href="{% url 'dashboard:hallazgo_detalle' h.pk %}">Hallazgo #{{ h.pk }}</a> — {{ h.tipo_etiqueta }}: {{ h.indicador_principal.nombre|truncatechars:80 }}</li>
     {% endfor %}
     </ul>
 {% else %}

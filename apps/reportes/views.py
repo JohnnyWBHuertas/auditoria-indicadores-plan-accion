@@ -2,8 +2,17 @@ from django.http import HttpResponse
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 
+from apps.auditoria.consultas import etiqueta_tipo, filtrar_por_tipo
 from apps.auditoria.models import Hallazgo
 from apps.gobernanza.permisos import requiere_permiso
+
+
+def _celda_segura(valor):
+    """Evita la inyeccion de formulas: un texto del reporte que empiece por = + - @ se
+    interpretaria como formula al abrir el Excel exportado; se antepone una comilla."""
+    if isinstance(valor, str) and valor[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + valor
+    return valor
 
 
 @requiere_permiso("auditoria.view_hallazgo")
@@ -16,8 +25,7 @@ def exportar_excel(request):
     tipo = request.GET.get("tipo")
     estado = request.GET.get("estado")
     dependencia = request.GET.get("dependencia")
-    if tipo:
-        qs = qs.filter(tipo=tipo)
+    qs = filtrar_por_tipo(qs, tipo)
     if estado:
         qs = qs.filter(estado=estado)
     if dependencia:
@@ -38,9 +46,9 @@ def exportar_excel(request):
     ws.append(encabezados)
 
     for h in qs:
-        ws.append([
+        ws.append([_celda_segura(v) for v in [
             h.pk,
-            h.get_tipo_display(),
+            etiqueta_tipo(h),
             h.get_estado_display(),
             h.indicador_principal.nombre,
             str(h.indicador_principal.dependencia),
@@ -52,7 +60,7 @@ def exportar_excel(request):
             str(h.revisado_por) if h.revisado_por else "",
             h.observacion_revision,
             h.creado_en.strftime("%Y-%m-%d %H:%M"),
-        ])
+        ]])
 
     for i, _ in enumerate(encabezados, start=1):
         ws.column_dimensions[get_column_letter(i)].width = 28

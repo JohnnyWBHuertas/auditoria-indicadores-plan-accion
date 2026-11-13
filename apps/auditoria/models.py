@@ -106,6 +106,17 @@ class Hallazgo(models.Model):
             models.Index(fields=["ejecucion"]),
         ]
 
+    @property
+    def tipo_etiqueta(self) -> str:
+        """Nombre del tipo para el auditor; el subresultado «valor faltante» de la regla de divergencia se muestra aparte."""
+        if self.tipo == "divergencia_operativa" and (self.atributos_comparados or {}).get("clasificacion") == "valor_faltante":
+            return "Valor faltante (regla de divergencia)"
+        return self.get_tipo_display()
+
+    @property
+    def clase_tipo(self) -> str:
+        return "valor_faltante" if self.tipo_etiqueta.startswith("Valor faltante") else self.tipo
+
     def __str__(self):
         return f"{self.get_tipo_display()} — {self.indicador_principal_id}"
 

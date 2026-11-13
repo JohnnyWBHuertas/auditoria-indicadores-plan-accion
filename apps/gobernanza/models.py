@@ -120,6 +120,25 @@ class EjecucionAuditoria(models.Model):
         ),
     )
 
+    # Registro de reproducibilidad: lo necesario para reconstruir y comparar una corrida.
+    version_aplicacion = models.CharField(max_length=20, blank=True, help_text="Versión del prototipo que ejecutó la auditoría.")
+    modelo_embeddings = models.CharField(max_length=150, blank=True)
+    revision_modelo = models.CharField(
+        max_length=64, blank=True, help_text="Revisión (hash) del modelo en el almacén local; vacío si no se pudo leer."
+    )
+    version_reglas = models.CharField(max_length=20, blank=True, help_text="Versión del conjunto de reglas de auditoría.")
+    parametros_ejecucion = models.JSONField(
+        default=dict, blank=True, help_text="Umbrales y versiones del entorno (Python, Django, sentence-transformers, torch, numpy)."
+    )
+    indicadores_procesados = models.PositiveIntegerField(default=0)
+    pares_candidatos = models.PositiveIntegerField(default=0)
+    huella_datos = models.CharField(
+        max_length=64, blank=True, help_text="SHA-256 de los indicadores de la vigencia; dos corridas con la misma huella comparan los mismos datos."
+    )
+    rendimiento = models.JSONField(
+        default=dict, blank=True, help_text="Tiempo por etapa (s) y memoria máxima aproximada (MB) de la corrida."
+    )
+
     class Meta:
         verbose_name = "Ejecución de auditoría"
         verbose_name_plural = "Ejecuciones de auditoría"

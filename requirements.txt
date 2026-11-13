@@ -1,5 +1,7 @@
 # Prototipo de auditoria de indicadores del Plan de Accion (Python 3.12)
-# Las versiones corresponden a la Tabla 3 de la monografia (Stack tecnologico).
+# Las versiones corresponden a la tabla del stack tecnologico de la monografia.
+# Versiones exactas verificadas en la version 1.2: Python 3.12.9, Django 5.2.17, django-environ 0.14.0,
+# psycopg 3.3.6, openpyxl 3.1.5, sentence-transformers 6.1.0, torch 2.14.0 (CPU), numpy 2.5.3, scikit-learn 1.9.1.
 
 # Aplicacion web monolitica modular
 Django~=5.2.0
@@ -15,3 +17,6 @@ openpyxl~=3.1
 sentence-transformers~=6.1
 torch~=2.14
 numpy>=2.0
+
+# Metricas de la evaluacion acotada (precision, exhaustividad y F1); ya llega como dependencia de sentence-transformers
+scikit-learn~=1.9

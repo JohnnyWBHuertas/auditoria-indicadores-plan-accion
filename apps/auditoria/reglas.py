@@ -24,6 +24,7 @@ from apps.ingesta.models import Indicador
 from apps.nlp_engine import embeddings as nlp
 from apps.nlp_engine.models import ParCandidato
 
+from . import reproducibilidad as repro
 from .models import CorrespondenciaManual, Hallazgo, ReglaAuditoria
 
 CAMPOS_CLONACION = ["nombre", "formula", "meta"]
@@ -35,6 +36,28 @@ CAMPOS_CLONACION_VARIABLES = ["dependencia_id", "vigencia", "meta", "producto_ac
 # positivos sistematicos). Solo unidad_medida y periodicidad son lo bastante
 # categoricos para que una desigualdad textual sea evidencia de divergencia.
 CAMPOS_DIVERGENCIA = ["unidad_medida", "periodicidad"]
+
+# Regla R-1.2 (observaciones 08 y M4 de los jurados): una diferencia solo es
+# divergencia cuando AMBOS valores estan presentes. Si falta uno, no se puede
+# afirmar que difieran: se registra como «valor faltante». Si faltan los dos, no
+# hay nada que comparar (la incompletitud de cada indicador ya lo senala).
+# «Campo no aplicable» no se puede detectar: el reporte no trae el tipo de
+# indicador; lo marca el auditor al revisar.
+VALORES_AUSENTES = ("", "no_especificada", None)
+
+
+def _ausente(valor) -> bool:
+    return (valor.strip() if isinstance(valor, str) else valor) in VALORES_AUSENTES
+
+
+def estado_atributo(a, b) -> str:
+    """'igual', 'incompatible' (ambos presentes y distintos), 'faltante' (falta uno) o 'ambos_ausentes'."""
+    ausente_a, ausente_b = _ausente(a), _ausente(b)
+    if ausente_a and ausente_b:
+        return "ambos_ausentes"
+    if ausente_a or ausente_b:
+        return "faltante"
+    return "igual" if _normalizar(str(a)) == _normalizar(str(b)) else "incompatible"
 
 # Heuristica lexica del Informe de Duplicidad de Indicadores PAA 2026: un
 # nombre que inicia en verbo o sustantivo de accion puntual describe una
@@ -73,7 +96,7 @@ def evaluar_pares_candidatos(ejecucion: EjecucionAuditoria, vigencia: str) -> di
     operativa o duplicidad (CU2 -> CU3/CU4). Cada ejecucion reevalua todos
     los pares vigentes, de modo que repetir la auditoria produce el mismo
     resultado."""
-    conteo = {"clonacion": 0, "divergencia_operativa": 0, "duplicidad": 0}
+    conteo = {"clonacion": 0, "divergencia_operativa": 0, "valor_faltante": 0, "duplicidad": 0}
 
     regla_clonacion = _obtener_regla("clonacion")
     regla_divergencia = _obtener_regla("divergencia_operativa")
@@ -116,7 +139,24 @@ def evaluar_pares_candidatos(ejecucion: EjecucionAuditoria, vigencia: str) -> di
                 ),
             )
             conteo["clonacion"] += 1
-        elif any(getattr(a, c) != getattr(b, c) for c in CAMPOS_DIVERGENCIA):
+        elif any(estado_atributo(getattr(a, c), getattr(b, c)) in ("incompatible", "faltante") for c in CAMPOS_DIVERGENCIA):
+            estados = {c: estado_atributo(getattr(a, c), getattr(b, c)) for c in CAMPOS_DIVERGENCIA}
+            incompatibles = [c for c, e in estados.items() if e == "incompatible"]
+            faltantes = [c for c, e in estados.items() if e == "faltante"]
+            if incompatibles:
+                clasificacion = "valores_incompatibles"
+                evidencia = (
+                    f"Los indicadores #{a.pk} y #{b.pk} son semánticamente equivalentes "
+                    f"(similitud {par.similitud_coseno:.0%}) pero tienen valores distintos en {', '.join(incompatibles)}: "
+                    "falla de la dimensión de consistencia."
+                )
+            else:
+                clasificacion = "valor_faltante"
+                evidencia = (
+                    f"Los indicadores #{a.pk} y #{b.pk} son semánticamente equivalentes "
+                    f"(similitud {par.similitud_coseno:.0%}), pero falta {', '.join(faltantes)} en uno de los dos: "
+                    "no se puede afirmar que difieran. Es un problema de completitud, no una divergencia demostrada."
+                )
             _crear_hallazgo(
                 ejecucion=ejecucion,
                 regla=regla_divergencia,
@@ -124,17 +164,15 @@ def evaluar_pares_candidatos(ejecucion: EjecucionAuditoria, vigencia: str) -> di
                 indicador_relacionado=b,
                 score=par.similitud_coseno,
                 atributos_comparados={
+                    "clasificacion": clasificacion,
+                    "estado_por_atributo": estados,
                     "similitud_semantica": round(par.similitud_coseno, 4),
                     "indicador_a": _snapshot(a, CAMPOS_DIVERGENCIA),
                     "indicador_b": _snapshot(b, CAMPOS_DIVERGENCIA),
                 },
-                evidencia=(
-                    f"Los indicadores #{a.pk} y #{b.pk} son semánticamente equivalentes "
-                    f"(similitud {par.similitud_coseno:.0%}) pero difieren en unidad de "
-                    "medida o periodicidad: falla de la dimensión de consistencia."
-                ),
+                evidencia=evidencia,
             )
-            conteo["divergencia_operativa"] += 1
+            conteo["divergencia_operativa" if incompatibles else "valor_faltante"] += 1
         else:
             _crear_hallazgo(
                 ejecucion=ejecucion,
@@ -243,23 +281,38 @@ def conteo_correspondencia(ejecucion: EjecucionAuditoria) -> dict:
 
 def ejecutar_auditoria(vigencia: str, usuario=None) -> EjecucionAuditoria:
     """Orquesta CU2 -> CU3 -> CU4 sobre una vigencia y deja el resumen de
-    las 6 variables observables listo para el tablero (CU5)."""
+    las 6 variables observables listo para el tablero (CU5). Al iniciar registra
+    la configuracion de la corrida (version del modelo y de las reglas, umbrales,
+    entorno y huella de los datos) y al terminar el tiempo de cada etapa."""
+    cronometro = repro.Cronometro()
     ejecucion = EjecucionAuditoria.objects.create(
         vigencia=vigencia,
         ejecutado_por=usuario,
         ejecucion_100_por_ciento_local=settings.EJECUCION_100_POR_CIENTO_LOCAL,
+        version_aplicacion=repro.VERSION_APLICACION,
+        modelo_embeddings=settings.NLP_ENGINE["EMBEDDING_MODEL"],
+        revision_modelo=repro.revision_modelo(),
+        version_reglas=repro.VERSION_REGLAS,
+        parametros_ejecucion=repro.parametros_de_ejecucion(),
+        indicadores_procesados=Indicador.objects.filter(vigencia=vigencia).count(),
+        huella_datos=repro.huella_datos(vigencia),
     )
 
     try:
-        nlp.generar_embeddings_pendientes()
-        nlp.generar_pares_candidatos(vigencia)
+        with cronometro.etapa("embeddings_s"):
+            nlp.generar_embeddings_pendientes()
+        with cronometro.etapa("pares_candidatos_s"):
+            n_pares = nlp.generar_pares_candidatos(vigencia)
     except Exception:
         ejecucion.delete()  # sin embeddings no hay auditoria: no dejar una ejecucion vacia
         raise
+    ejecucion.pares_candidatos = n_pares if isinstance(n_pares, int) else 0
 
-    conteo_pares = evaluar_pares_candidatos(ejecucion, vigencia)
-    conteo_incompletitud = evaluar_incompletitud(ejecucion, vigencia)
-    conteo_metodologico = evaluar_problema_metodologico(ejecucion, vigencia)
+    with cronometro.etapa("reglas_pares_s"):
+        conteo_pares = evaluar_pares_candidatos(ejecucion, vigencia)
+    with cronometro.etapa("reglas_indicador_s"):
+        conteo_incompletitud = evaluar_incompletitud(ejecucion, vigencia)
+        conteo_metodologico = evaluar_problema_metodologico(ejecucion, vigencia)
 
     indicadores = Indicador.objects.filter(vigencia=vigencia)
     total_campos_exigidos = 0
@@ -284,6 +337,7 @@ def ejecutar_auditoria(vigencia: str, usuario=None) -> EjecucionAuditoria:
             "duplicidad": conteo_pares["duplicidad"],
             "clonacion": conteo_pares["clonacion"],
             "divergencia_operativa": conteo_pares["divergencia_operativa"],
+            "valor_faltante": conteo_pares["valor_faltante"],
             "incompletitud_atributos": conteo_incompletitud,
             "problema_metodologico": conteo_metodologico,
         },
@@ -295,5 +349,6 @@ def ejecutar_auditoria(vigencia: str, usuario=None) -> EjecucionAuditoria:
         "ejecucion_100_por_ciento_local": settings.EJECUCION_100_POR_CIENTO_LOCAL,
     }
     ejecucion.finalizada_en = timezone.now()
-    ejecucion.save(update_fields=["resumen_metricas", "finalizada_en"])
+    ejecucion.rendimiento = cronometro.resultado()
+    ejecucion.save(update_fields=["resumen_metricas", "finalizada_en", "rendimiento", "pares_candidatos"])
     return ejecucion

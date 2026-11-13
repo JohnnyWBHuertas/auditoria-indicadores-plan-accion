@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views, views_comparar, views_detalle
+from . import views, views_agrupados, views_comparar, views_detalle
 
 app_name = "dashboard"
 
@@ -14,4 +14,5 @@ urlpatterns = [
     path("ejecuciones/<int:pk>/correspondencia/", views_detalle.correspondencia, name="detalle_correspondencia"),
     path("ejecuciones/<int:pk>/trazabilidad/", views_detalle.trazabilidad, name="detalle_trazabilidad"),
     path("ejecuciones/<int:pk>/completitud/", views_detalle.completitud, name="detalle_completitud"),
+    path("ejecuciones/<int:pk>/agrupados/", views_agrupados.agrupados, name="agrupados"),
 ]

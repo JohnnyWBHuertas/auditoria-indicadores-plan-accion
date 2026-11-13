@@ -110,6 +110,55 @@
     </div>
     {% endwith %}
 
+    <h3 class="h6">Calidad de los datos y prioridad de revisión</h3>
+    <p class="small text-muted">Cada cifra se calcula con consultas directas sobre la base; los hallazgos son señalamientos automáticos hasta que un auditor los revisa.</p>
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-lg-6"><div class="card h-100"><div class="card-body">
+            <div class="small fw-semibold mb-2">Completitud por atributo (% de indicadores que lo diligencian)</div>
+            <div style="position:relative;height:260px"><canvas id="g-completitud" aria-label="Completitud por atributo" role="img"></canvas></div>
+        </div></div></div>
+        <div class="col-12 col-lg-6"><div class="card h-100"><div class="card-body">
+            <div class="small fw-semibold mb-2">Señalamientos por tipo</div>
+            <div style="position:relative;height:260px"><canvas id="g-tipos" aria-label="Señalamientos por tipo" role="img"></canvas></div>
+        </div></div></div>
+        <div class="col-12 col-lg-6"><div class="card h-100"><div class="card-body">
+            <div class="small fw-semibold mb-2">Señalamientos por dependencia (las {{ calidad.dependencias|length }} con más)</div>
+            <div style="position:relative;height:300px"><canvas id="g-dependencias" aria-label="Señalamientos por dependencia" role="img"></canvas></div>
+        </div></div></div>
+        <div class="col-12 col-lg-6"><div class="card h-100"><div class="card-body">
+            <div class="small fw-semibold mb-2">Avance de la revisión humana</div>
+            <div class="fs-3" id="pct-revisados">{{ calidad.pct_revisados }}%</div>
+            <div class="small text-muted mb-2">{{ calidad.revisados }} de {{ calidad.total }} señalamientos revisados (confirmados o descartados)</div>
+            <div style="position:relative;height:200px"><canvas id="g-revision" aria-label="Estado de la revisión" role="img"></canvas></div>
+        </div></div></div>
+    </div>
+
+    <div class="card mb-4 border-primary"><div class="card-body">
+        <h3 class="h6">Prioridad de revisión: indicadores repetidos agrupados</h3>
+        <p class="mb-2 small">
+            Los {{ agrupacion.pares_individuales }} pares señalados se reducen a <strong>{{ agrupacion.unidades_de_revision }} unidades de revisión</strong>:
+            grupos transversales (mismo nombre en varias dependencias): {{ agrupacion.grupos_transversales }};
+            grupos de repetición dentro de una dependencia: {{ agrupacion.grupos_en_dependencia }};
+            pares con nombres distintos: {{ agrupacion.pares_sueltos }}.
+            Ningún par ni hallazgo se elimina.
+        </p>
+        <a class="btn btn-sm btn-outline-primary" href="{% url 'dashboard:agrupados' ultima_ejecucion.pk %}">Ver los grupos →</a>
+    </div></div>
+
+    {% if ultima_ejecucion.version_reglas %}
+    <details class="mb-4 small">
+        <summary class="text-muted">Registro de reproducibilidad de esta ejecución</summary>
+        <table class="table table-sm bg-white mt-2" style="max-width:760px">
+            <tr><th>Versión del prototipo / reglas</th><td>{{ ultima_ejecucion.version_aplicacion }} / {{ ultima_ejecucion.version_reglas }}</td></tr>
+            <tr><th>Modelo de embeddings</th><td>{{ ultima_ejecucion.modelo_embeddings }}{% if ultima_ejecucion.revision_modelo %} (revisión {{ ultima_ejecucion.revision_modelo|slice:":8" }}){% endif %}</td></tr>
+            <tr><th>Umbrales</th><td>duplicidad {{ ultima_ejecucion.parametros_ejecucion.umbral_duplicidad }}; clonación textual {{ ultima_ejecucion.parametros_ejecucion.umbral_clonacion_textual }}</td></tr>
+            <tr><th>Indicadores procesados / pares candidatos</th><td>{{ ultima_ejecucion.indicadores_procesados }} / {{ ultima_ejecucion.pares_candidatos }}</td></tr>
+            <tr><th>Huella de los datos (SHA-256)</th><td><code>{{ ultima_ejecucion.huella_datos|slice:":16" }}…</code></td></tr>
+            <tr><th>Tiempo total / memoria máxima</th><td>{{ ultima_ejecucion.rendimiento.total_s }} s / {{ ultima_ejecucion.rendimiento.memoria_pico_mb }} MB</td></tr>
+        </table>
+    </details>
+    {% endif %}
+
     <h3 class="h6">Hallazgos por dependencia</h3>
     <table class="table table-sm bg-white mb-4">
         <thead><tr><th>Dependencia</th><th class="text-end">Hallazgos</th></tr></thead>
@@ -134,4 +183,35 @@
     <div class="alert alert-info">Aún no se ha ejecutado ninguna auditoría. Cargue indicadores y ejecútela arriba.</div>
 {% endif %}
 
+{% endblock %}
+
+{% block scripts %}
+{% if datos_graficas %}
+{{ datos_graficas|json_script:"datos-graficas" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+    var d = JSON.parse(document.getElementById("datos-graficas").textContent);
+    var paleta = ["#2f4b7c", "#bc5090", "#ffa600", "#58a55c", "#7a5195", "#ef5675"];
+    function corto(t) { t = String(t); return t.length > 34 ? t.slice(0, 33) + "…" : t; }
+    function barras(id, datos, horizontal, maximo100) {
+        new Chart(document.getElementById(id), {
+            type: "bar",
+            data: {labels: datos.etiquetas, datasets: [{data: datos.valores, backgroundColor: "#2f4b7c"}]},
+            options: {indexAxis: horizontal ? "y" : "x", maintainAspectRatio: false, plugins: {legend: {display: false}},
+                      scales: horizontal ? {x: {beginAtZero: true, max: maximo100 ? 100 : undefined}, y: {ticks: {callback: function (v) { return corto(this.getLabelForValue(v)); }}}}
+                                         : {y: {beginAtZero: true}}}
+        });
+    }
+    barras("g-completitud", d.completitud, true, true);
+    barras("g-tipos", d.tipos, false, false);
+    barras("g-dependencias", d.dependencias, true, false);
+    new Chart(document.getElementById("g-revision"), {
+        type: "doughnut",
+        data: {labels: d.revision.etiquetas, datasets: [{data: d.revision.valores, backgroundColor: ["#c9d1de", "#58a55c", "#ef5675"]}]},
+        options: {maintainAspectRatio: false, plugins: {legend: {position: "right"}}}
+    });
+})();
+</script>
+{% endif %}
 {% endblock %}

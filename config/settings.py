@@ -22,14 +22,38 @@ truststore.inject_into_ssl()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+import sys
+
+from django.core.exceptions import ImproperlyConfigured
+
+# Seguro por defecto: DEBUG apagado. Para desarrollo local se activa con DEBUG=True
+# (variable de entorno o archivo .env; ver .env.example).
 env = environ.Env(
-    DEBUG=(bool, True),
+    DEBUG=(bool, False),
 )
 environ.Env.read_env(BASE_DIR / ".env")
 
+CLAVES_NO_SEGURAS = {"django-insecure-dev-key-change-me", "change-me-in-local-env"}
 SECRET_KEY = env("DJANGO_SECRET_KEY", default="django-insecure-dev-key-change-me")
 DEBUG = env("DEBUG")
+# Fuera de desarrollo no se arranca con una clave de ejemplo (las pruebas automaticas si pueden).
+if not DEBUG and SECRET_KEY in CLAVES_NO_SEGURAS and sys.argv[1:2] != ["test"]:
+    raise ImproperlyConfigured(
+        "Defina DJANGO_SECRET_KEY con un valor propio, o active DEBUG=True solo para desarrollo local (ver .env.example)."
+    )
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
+
+# Sesion y cookies. Las cookies seguras exigen HTTPS: se activan con COOKIES_SEGURAS=True tras un proxy con TLS.
+SESSION_COOKIE_AGE = env.int("SESION_DURACION_SEGUNDOS", default=8 * 60 * 60)  # 8 horas
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = env.bool("COOKIES_SEGURAS", default=False)
+SECURE_REFERRER_POLICY = "same-origin"
+X_FRAME_OPTIONS = "DENY"
+
+# Carga de archivos: tamano maximo (MB) del reporte; los formatos permitidos se validan en el formulario.
+CARGA_TAMANO_MAXIMO_MB = env.int("CARGA_TAMANO_MAXIMO_MB", default=25)
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -92,7 +116,7 @@ else:
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 10}},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]

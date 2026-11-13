@@ -334,6 +334,44 @@ def _casos(usar_modelo: bool) -> list[dict]:
         ("Sin conexiones salientes; bandera " if not usar_modelo else "Bandera ") + str(ejecucion.ejecucion_100_por_ciento_local),
         ejecucion.ejecucion_100_por_ciento_local is True,
     ))
+    filas.extend(_casos_valor_faltante())
+    return filas
+
+
+def _casos_valor_faltante():
+    """CP-20 a CP-22 (observaciones 08 y M4): la diferencia de periodicidad o unidad solo es divergencia
+    si ambos valores estan presentes; si falta uno es «valor faltante»; si faltan los dos no se senala."""
+    from apps.gobernanza.models import Dependencia, EjecucionAuditoria
+    from .reglas import evaluar_pares_candidatos
+
+    dependencia, _ = Dependencia.objects.get_or_create(nombre="Dependencia de prueba de valores faltantes")
+    casos = [
+        ("CP-20", "Ambos valores presentes y distintos", ("trimestral", "Número"), ("anual", "Número"),
+         "1 divergencia operativa con valores incompatibles", ("divergencia_operativa", "valores_incompatibles")),
+        ("CP-21", "Un valor ausente", ("trimestral", "Número"), ("no_especificada", "Número"),
+         "1 resultado «valor faltante» y ninguna divergencia demostrada", ("divergencia_operativa", "valor_faltante")),
+        ("CP-22", "Ambos valores ausentes", ("no_especificada", ""), ("no_especificada", ""),
+         "Ni divergencia ni valor faltante: el par se clasifica como duplicidad", ("duplicidad", None)),
+    ]
+    filas = []
+    for codigo, descripcion, (per_a, uni_a), (per_b, uni_b), esperado, (tipo_esp, clase_esp) in casos:
+        vig = "V" + codigo
+        a = Indicador.objects.create(nombre=f"Visitas guiadas realizadas {codigo}", objetivo="Cantidad de visitas guiadas",
+                                     periodicidad=per_a, unidad_medida=uni_a, dependencia=dependencia, vigencia=vig)
+        b = Indicador.objects.create(nombre=f"Recorridos guiados ejecutados {codigo}", objetivo="Cantidad de recorridos guiados",
+                                     periodicidad=per_b, unidad_medida=uni_b, dependencia=dependencia, vigencia=vig)
+        ParCandidato.objects.create(indicador_a=a, indicador_b=b, similitud_coseno=0.9, modelo=settings.NLP_ENGINE["EMBEDDING_MODEL"])
+        ejecucion = EjecucionAuditoria.objects.create(vigencia=vig)
+        evaluar_pares_candidatos(ejecucion, vig)
+        hallazgos = list(ejecucion.hallazgos.all())
+        tipo = hallazgos[0].tipo if len(hallazgos) == 1 else None
+        clase = (hallazgos[0].atributos_comparados or {}).get("clasificacion") if len(hallazgos) == 1 else None
+        filas.append(_fila(
+            codigo, "CU4 Divergencia operativa y valores faltantes", "Valores incompatibles, valor faltante y ambos ausentes",
+            f"{descripcion}: periodicidad {per_a} / {per_b}; unidad «{uni_a}» / «{uni_b}»", esperado,
+            f"{len(hallazgos)} hallazgo(s): {tipo}" + (f" ({clase})" if clase else ""),
+            len(hallazgos) == 1 and tipo == tipo_esp and clase == clase_esp,
+        ))
     return filas
 
 

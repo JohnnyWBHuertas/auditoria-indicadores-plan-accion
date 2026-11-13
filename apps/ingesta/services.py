@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 import os
 import re
 
@@ -20,6 +21,8 @@ from openpyxl import load_workbook
 from apps.gobernanza.models import Dependencia
 
 from .models import CargaArchivo, HistorialCambioIndicador, Indicador, LineaPAA
+
+logger = logging.getLogger(__name__)
 
 CAMPOS_HOJA_DE_VIDA = [
     "objetivo", "formula", "unidad_medida", "linea_base",
@@ -72,7 +75,9 @@ def procesar_archivo(carga: CargaArchivo) -> None:
         _procesar(carga)
     except Exception as exc:
         carga.estado = "fallido"
-        carga.detalle_errores = [f"Error inesperado al procesar el archivo: {exc}"]
+        # El detalle que ve el usuario no incluye rutas ni mensajes internos; la causa queda en el registro del servidor.
+        logger.exception("Error inesperado al procesar la carga %s", carga.pk)
+        carga.detalle_errores = [f"Error inesperado al procesar el archivo ({type(exc).__name__}). Revise el formato y la plantilla."]
         carga.save(update_fields=["estado", "detalle_errores"])
     finally:
         if not settings.CONSERVAR_ARCHIVO_ORIGINAL:
@@ -94,7 +99,8 @@ def _procesar(carga: CargaArchivo) -> None:
         columnas, filas = _leer_tabla(carga.archivo)
     except Exception as exc:
         carga.estado = "fallido"
-        carga.detalle_errores = [f"No fue posible leer el archivo: {exc}"]
+        logger.warning("No fue posible leer la carga %s: %s", carga.pk, exc)
+        carga.detalle_errores = [f"No fue posible leer el archivo ({type(exc).__name__}). Verifique que sea un .xlsx o .csv válido."]
         carga.save(update_fields=["estado", "detalle_errores"])
         return
 
